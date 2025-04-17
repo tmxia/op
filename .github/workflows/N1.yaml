@@ -2,7 +2,7 @@ name: N1
 
 on:
   workflow_dispatch:
-   inputs:
+    inputs:
       ssh:
         description: 'SSH connection to Actions'
         required: false
@@ -45,6 +45,22 @@ jobs:
 
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Cache OpenWrt dl directory
+      uses: actions/cache@v3
+      with:
+        path: openwrt/dl
+        key: ${{ runner.os }}-openwrt-dl-${{ hashFiles('openwrt/.config') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-dl-
+
+    - name: Cache OpenWrt build_dir directory
+      uses: actions/cache@v3
+      with:
+        path: openwrt/build_dir
+        key: ${{ runner.os }}-openwrt-build_dir-${{ hashFiles('openwrt/.config') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-build_dir-
 
     - name: Initialize environment
       env:
@@ -114,7 +130,7 @@ jobs:
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
         KERNEL_VERSION_NAME: 6.12.y
         PACKAGE_SOC: diy
-        GZIP_IMGS: .xz
+        GZIP_IMGS:.xz
         SCRIPT_DIY_PATH: n1/mk_s905d_n1.sh
         WHOAMI: tmxia
         SW_FLOWOFFLOAD: 0
