@@ -33,8 +33,9 @@ jobs:
         echo "💾 Disk Space: $(df -h | grep '/dev/root' | awk '{print $4}') Free"
         echo "🧠 Memory: $(free -h | awk '/Mem/{print $2}') Total"
 
+    # 修复的磁盘空间优化步骤
     - name: Maximize build space
-      uses: easimon/maximize-build-space@c28619d # 锁定已知可用版本
+      uses: easimon/maximize-build-space@v0.6.0  # 使用已验证的发布版本
       with:
         swap-size-mb: 2048
         temp-reserve-mb: 1024
@@ -49,7 +50,7 @@ jobs:
         submodules: recursive
 
     - name: Cache dependencies
-      uses: actions/cache@3.4.3 # 精确指定版本
+      uses: actions/cache@3.4.3
       with:
         path: |
           openwrt/dl
@@ -98,21 +99,20 @@ jobs:
 
     - name: SSH connect
       if: (github.event.inputs.ssh == 'true') || contains(github.event.action, 'ssh')
-      uses: P3TERX/ssh2actions@71006b9 # 使用已验证的commit SHA
+      uses: P3TERX/ssh2actions@71006b9
 
-    # 修复打包步骤
     - name: Package image
       if: ${{ env.compile_status == 'success' && !cancelled() }}
-      uses: unifreq/openwrt_packit@1e4d9b1 # 使用有效commit SHA
+      uses: unifreq/openwrt_packit@1e4d9b1
       env:
         OPENWRT_ARMVIRT: openwrt/bin/targets/*/*/*.tar.gz
         PACKAGE_SOC: diy
-        SCRIPT_DYI_PATH: n1/mk_s905d_n1.sh
+        SCRIPT_DIY_PATH: n1/mk_s905d_n1.sh
         GZIP_IMGS: .xz
 
     - name: Upload release
       if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
-      uses: softprops/action-gh-release@0.2.1 # 改用稳定版本
+      uses: softprops/action-gh-release@0.2.1
       with:
         tag_name: Build_$(date +%Y%m%d%H%M)
         files: ${{ env.PACKAGED_OUTPUTPATH }}/*.img.xz
