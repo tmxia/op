@@ -1,0 +1,2 @@
+0 4 * * * $HOME/cron/daily.sh &>/dev/null
+0 6 1 * * $HOME/cron/monthly.sh &>/dev/null

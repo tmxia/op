@@ -1,0 +1,153 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ssh:
+        description: "SSH connection to Actions"
+        required: false
+        default: "false"
+
+env:
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
+  REPO_BRANCH: openwrt-24.10
+  CONFIG_FILE: n1/.config
+  DEPENDENCIES_FILE: n1/dependencies.txt
+  DIY_SH: n1/diy.sh
+  FILES: n1/files
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@main
+
+      - name: Free up space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Initialize environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq install $(cat $DEPENDENCIES_FILE)
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+          sudo timedatectl set-timezone "$TZ"
+          sudo mkdir -p /workdir
+          sudo chown $USER:$GROUPS /workdir
+
+      - name: Clone source code
+        working-directory: /workdir
+        run: |
+          git clone -b $REPO_BRANCH --single-branch --depth=1 $REPO_URL openwrt
+          ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+      - name: Update & Install feeds
+        working-directory: ./openwrt
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Load custom config
+        run: |
+          [ -e $FILES ] && mv $FILES openwrt/files
+          [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+          chmod +x $DIY_SH
+          cd openwrt
+          $GITHUB_WORKSPACE/$DIY_SH
+
+      - name: SSH connect to Actions
+        if: ${{ (github.event.inputs.ssh == 'true') || contains(github.event.action, 'ssh') }}
+        uses: P3TERX/ssh2actions@main
+
+      - name: Download package
+        working-directory: ./openwrt
+        run: |
+          echo -e "$(nproc) thread compile"
+          make defconfig
+          make download -j$(nproc)
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Compile the firmware
+        working-directory: ./openwrt
+        run: |
+          make -j$(nproc) || make -j1 || make -j1 V=s
+          echo "compile_status=success" >> $GITHUB_ENV
+          echo "BUILD_TIME=$(date +"%Y年%m月%d日%H时%M分%S秒")" >> $GITHUB_ENV
+
+      - name: Package armsr as openwrt
+        if: ${{ env.compile_status == 'success' }}
+        uses: unifreq/openwrt_packit@master
+        env:
+          OPENWRT_ARMVIRT: openwrt/bin/targets/*/*/*.tar.gz
+          KERNEL_VERSION_NAME: 6.12.y
+          PACKAGE_SOC: diy
+          GZIP_IMGS: .xz
+          SCRIPT_DIY_PATH: n1/mk_s905d_n1.sh
+          WHOAMI: tmxia
+          SW_FLOWOFFLOAD: 0
+          SFE_FLOW: 0
+          ENABLE_WIFI_K510: 0
+
+      - name: Upload firmware to release
+        if: ${{ env.PACKAGED_STATUS == 'success' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: OpenWrt_${{ env.PACKAGED_OUTPUTDATE }}
+          files: ${{ env.PACKAGED_OUTPUTPATH }}/*.img.xz
+          body: |
+            🍁 注意: 首次使用建议全新刷写
+            💻 机型: 斐讯N1
+            📂 源码: ${{ env.REPO_URL }}
+            🌳 分支: ${{ env.REPO_BRANCH }}
+            ⌚ 时间: ${{ env.BUILD_TIME }}
+            🌐 地址: 192.168.3.3
+            👤 用户: root
+            🔒 密码: password
+
+  # ===========================================================================
+
+  reset:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+        with:
+          fetch-depth: 0
+
+      - name: Branch
+        run: |
+          git checkout --orphan tmp_work
+          git branch -d main
+
+      - name: Upload to repository
+        uses: stefanzweifel/git-auto-commit-action@master
+        with:
+          create_branch: true
+          branch: main
+          push_options: --force
+
+      - name: Delete old releases
+        uses: sgpublic/delete-release-action@master
+        with:
+          release-drop: true
+          pre-release-drop: false
+          draft-drop: false
+          release-keep-count: 1
