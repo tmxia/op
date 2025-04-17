@@ -96,9 +96,10 @@ jobs:
         ccache --show-stats
         echo "compile_status=success" >> $GITHUB_ENV
 
+    # 修复的 SSH 连接部分
     - name: SSH connect
       if: (github.event.inputs.ssh == 'true') || contains(github.event.action, 'ssh')
-      uses: P3TERX/ssh2actions@v2.0.0
+      uses: P3TERX/ssh2actions@main  # 改回使用 main 分支
 
     - name: Package image
       if: ${{ env.compile_status == 'success' && !cancelled() }}
