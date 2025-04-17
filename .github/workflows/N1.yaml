@@ -35,7 +35,7 @@ jobs:
     - name: Maximize build space
       uses: easimon/maximize-build-space@master
       with:
-        swap-size-mb: 1024
+        swap-size-mb: ${{ (github.runner.cpu_count * 1024) }}
         temp-reserve-mb: 512
         root-reserve-mb: 4608
         remove-dotnet: 'true'
@@ -54,6 +54,7 @@ jobs:
         sudo -E apt-get -qq install $(cat $DEPENDENCIES_FILE)
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
+        sudo apt-get clean
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
@@ -98,6 +99,12 @@ jobs:
         echo -e "$(nproc) thread compile"
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "compile_status=success" >> $GITHUB_ENV
+
+    - name: Clean OpenWrt build cache
+      run: |
+        cd openwrt
+        make clean
+        rm -rf dl
 
     - name: Package armsr as openwrt
       if: ${{ env.compile_status }} == 'success' && !cancelled()
