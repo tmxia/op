@@ -13,10 +13,10 @@ on:
 env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-24.10
-  CONFIG_FILE: N1/.config
-  DEPENDENCIES_FILE: N1/dependencies.txt
-  DIY_SH: N1/diy.sh
-  FILES: N1/files
+  CONFIG_FILE: n1/.config
+  DEPENDENCIES_FILE: n1/dependencies.txt
+  DIY_SH: n1/diy.sh
+  FILES: n1/files
   TZ: Asia/Shanghai
 
 jobs:
