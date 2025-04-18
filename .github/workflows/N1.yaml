@@ -13,8 +13,8 @@ on:
 env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-24.10
-  CONFIG_FILE: n1/.config
   DEPENDENCIES_FILE: n1/dependencies.txt
+  CONFIG_FILE: n1/.config
   DIY_SH: n1/diy.sh
   FILES: n1/files
   TZ: Asia/Shanghai
@@ -24,27 +24,19 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - name: Show system
-      run: |
-        echo -e "💬 Server information \n"
-        echo -e "💻 Server running on Ubuntu: [ Release: $(cat /etc/os-release | grep VERSION_CODENAME | cut -d '=' -f2) / Host: $(arch) ] \n"
-        echo -e "🧮 Server CPU configuration information: \n$(cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c) \n"
-        echo -e "💾 Server memory usage: \n$(free -h) \n"
-        echo -e "🗃️ Server space usag: \n$(df -hT ${GITHUB_WORKSPACE}) \n"
-
-    - name: Maximize build space
-      uses: easimon/maximize-build-space@master
-      with:
-        swap-size-mb: 1024
-        temp-reserve-mb: 512
-        root-reserve-mb: 4608
-        remove-dotnet: 'true'
-        remove-android: 'true'
-        remove-haskell: 'true'
-        remove-codeql: 'true'
-
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@main
+
+    - name: Free up space
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: true
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: true
 
     - name: Initialize environment
       env:
