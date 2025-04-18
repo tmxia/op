@@ -13,8 +13,11 @@ git_sparse_clone() {
     cd .. && rm -rf "$repodir"
 }
 
+# Changing the host name
+sed -i 's/option hostname.*/option hostname "n1"/g' /etc/config/system
+
 # Modify default theme
-sed -i 's/luci-theme-argon/luci-theme-bootstrap/g' feeds/luci/collections/luci/Makefile
+sed -i 's/luci-theme-argon/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
 
 # Add packages
 git clone --single-branch --depth=1 https://github.com/ophub/luci-app-amlogic package/luci-app-amlogic
