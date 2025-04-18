@@ -26,3 +26,6 @@ cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luc
 
 # Clean packages
 rm -rf clone
+
+# pip3 packages
+pip3 install "requests" "telethon" "tqdm" "paramiko" "tailer" "flask-cors" "unrar" "pytz" "bleach" "beautifulsoup4" "python-dateutil" "docker"
