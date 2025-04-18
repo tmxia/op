@@ -20,7 +20,6 @@ git_sparse_clone() {
     cd .. && rm -rf "$repodir"
 }
 
-
 # Add packages
 git clone --single-branch --depth=1 https://github.com/ophub/luci-app-amlogic package/luci-app-amlogic
 git clone https://github.com/xiaorouji/openwrt-passwall --depth=1 clone/passwall
