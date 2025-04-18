@@ -37,3 +37,7 @@ echo "[global]
 index-url = https://pypi.tuna.tsinghua.edu.cn/simple
 trusted-host = pypi.tuna.tsinghua.edu.cn" > /root/.pip/pip.conf
 
+# Pip3 packages
+pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
+
+
