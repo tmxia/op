@@ -1,4 +1,4 @@
-name: N1-OpenWrt
+name: N1-IDE
 
 on:
   workflow_dispatch:
