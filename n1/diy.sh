@@ -13,12 +13,6 @@ git_sparse_clone() {
     cd .. && rm -rf "$repodir"
 }
 
-# Changing the host name
-sed -i 's/option hostname.*/option hostname "n1"/g' /etc/config/system
-
-# Modify default theme
-sed -i 's/luci-theme-argon/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
-
 # Add packages
 git clone --single-branch --depth=1 https://github.com/ophub/luci-app-amlogic package/luci-app-amlogic
 git clone https://github.com/xiaorouji/openwrt-passwall --depth=1 clone/passwall
@@ -29,10 +23,3 @@ cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luc
 
 # Clean packages
 rm -rf clone
-
-# Opkg packages
-opkg update
-opkg install vsftpd openssh-sftp-server wget-ssl sudo file logrotate coreutils-stat lsof
-
-# Pip3 packages
-pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
