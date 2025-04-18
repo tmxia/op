@@ -3,6 +3,13 @@
 # Default IP
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 
+# Modify default theme
+sed -i 's/luci-theme-design/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
+sed -i 's/luci-theme-argon/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
+
+# Changing the host name
+sed -i 's/ImmortalWrt/n1/g' package/base-files/files/bin/config_generate
+
 # Git sparse clone
 git_sparse_clone() {
     branch="$1" repourl="$2" && shift 2
@@ -13,12 +20,6 @@ git_sparse_clone() {
     cd .. && rm -rf "$repodir"
 }
 
-# Modify default theme
-sed -i 's/luci-theme-design/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
-sed -i 's/luci-theme-argon/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
-
-# Changing the host name
-sed -i 's/ImmortalWrt/n1/g' package/base-files/files/bin/config_generate
 
 # Add packages
 git clone --single-branch --depth=1 https://github.com/ophub/luci-app-amlogic package/luci-app-amlogic
