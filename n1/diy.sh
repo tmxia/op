@@ -32,10 +32,10 @@ cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luc
 rm -rf clone
 
 # Pip3 conf
-mkdir -p /root/.pip
+mkdir -p ~/.pip
 echo "[global]
 index-url = https://pypi.tuna.tsinghua.edu.cn/simple
-trusted-host = pypi.tuna.tsinghua.edu.cn" > /root/.pip/pip.conf
+trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
 
 # Pip3 packages
 pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
