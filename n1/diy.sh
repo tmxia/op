@@ -30,3 +30,10 @@ cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luc
 
 # Clean packages
 rm -rf clone
+
+# Pip3 conf
+mkdir -p /root/.pip
+echo "[global]
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+trusted-host = pypi.tuna.tsinghua.edu.cn" > /root/.pip/pip.conf
+
