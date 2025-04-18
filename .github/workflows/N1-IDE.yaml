@@ -1,4 +1,4 @@
-name: N1-IDE
+name: N1-LEDE
 
 on:
   workflow_dispatch:
