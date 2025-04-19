@@ -22,7 +22,7 @@ env:
 
 jobs:
   build_openwrt:
-    name: Build OpenWrt and release
+    name: OpenWrt
     runs-on: ubuntu-latest
     permissions:
       actions: write
