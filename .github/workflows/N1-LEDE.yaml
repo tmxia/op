@@ -15,9 +15,9 @@ env:
   FEEDS_CONF: feeds.conf.default
   REPO_BRANCH: master
   DEPENDENCIES_FILE: n1/dependencies.txt
-  CONFIG_FILE: n1/.config_lede
-  DIY_SH: n1/diy.sh
-  FILES: n1/files
+  CONFIG_FILE: n1-lede/.config
+  DIY_SH: n1-lede/diy.sh
+  FILES: n1-lede/files
   TZ: Asia/Shanghai
 
 jobs:
