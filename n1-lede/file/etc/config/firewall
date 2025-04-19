@@ -1,0 +1,21 @@
+
+config defaults
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+
+config zone
+	option name 'lan'
+	list network 'lan'
+	list network 'lan6'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+
+config zone 'docker'
+	option name 'docker'
+	list network 'docker'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+
