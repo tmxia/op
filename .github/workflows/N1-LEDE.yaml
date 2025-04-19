@@ -15,7 +15,7 @@ env:
   FEEDS_CONF: feeds.conf.default
   REPO_BRANCH: master
   DEPENDENCIES_FILE: n1/dependencies.txt
-  CONFIG_FILE: n1/.config
+  CONFIG_FILE: n1/.config_lede
   DIY_SH: n1/diy.sh
   FILES: n1/files
   TZ: Asia/Shanghai
