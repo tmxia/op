@@ -117,7 +117,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: OpenWrt_lede${{ env.PACKAGED_OUTPUTDATE }}
+        tag_name: OpenWrt_lede_${{ env.PACKAGED_OUTPUTDATE }}
         files: ${{ env.PACKAGED_OUTPUTPATH }}/*.img.xz
         body: |
           首次使用建议全新刷写
