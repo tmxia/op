@@ -20,8 +20,8 @@ git clone --depth=1 https://github.com/sirpdboy/luci-app-ddns-go package/ddnsgo
 #git clone --depth=1 https://github.com/sirpdboy/NetSpeedTest package/NetSpeedTest
 
 git clone -b v5-lua --single-branch --depth 1 https://github.com/sbwml/luci-app-mosdns package/mosdns
-git clone -b lua --single-branch --depth 1 https://github.com/sbwml/luci-app-alist package/alist
-git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git package/lucky
+#git clone -b lua --single-branch --depth 1 https://github.com/sbwml/luci-app-alist package/alist
+#git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git package/lucky
 #添加自定义的软件包源
 #git_sparse_clone main https://github.com/kiddin9/kwrt-packages ddns-go
 #git_sparse_clone main https://github.com/kiddin9/kwrt-packages luci-app-ddns-go
@@ -37,7 +37,7 @@ rm -rf feeds/luci/applications/luci-app-mosdns
 #rm -rf feeds/luci/applications/luci-app-design-config
 
 # Default IP
-sed -i 's/192.168.1.1/192.168.2.2/g' package/base-files/files/bin/config_generate
+sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 
 #修改默认时间格式
 sed -i 's/os.date()/os.date("%Y-%m-%d %H:%M:%S %A")/g' $(find ./package/*/autocore/files/ -type f -name "index.htm")
