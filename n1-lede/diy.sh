@@ -36,6 +36,22 @@ rm -rf feeds/luci/applications/luci-app-mosdns
 #rm -rf feeds/luci/themes/luci-theme-design
 #rm -rf feeds/luci/applications/luci-app-design-config
 
+# Update packages
+rm -rf feeds/luci/applications/luci-app-passwall
+cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luci/applications/
+
+# Clean packages
+rm -rf clone
+
+# Pip3 conf
+mkdir -p ~/.pip
+echo "[global]
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
+
+# Pip3 packages
+pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
+
 # Default IP
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 
