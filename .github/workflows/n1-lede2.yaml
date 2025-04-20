@@ -1,4 +1,4 @@
-name: N1-LEDE
+name: N1-LEDE2
 
 on:
   workflow_dispatch:
