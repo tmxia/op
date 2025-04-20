@@ -16,3 +16,18 @@ config interface 'lan'
   option ifname 'eth0'
   option dns '192.168.3.1'
 
+config interface 'lan6'
+	option device '@lan'
+	option proto 'dhcpv6'
+	option reqaddress 'try'
+	option reqprefix 'auto'
+	option peerdns '0'
+
+config device
+	option name 'docker0'
+	option type 'bridge'
+
+config interface 'docker'
+	option device 'docker0'
+	option proto 'none'
+	option auto '0'
