@@ -1,10 +1,15 @@
 #!/bin/bash
 
 # Default IP
-sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
+#sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
+sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/luci2/bin/config_generate
 
 # Changing the host name
 sed -i 's/ImmortalWrt/n1/g' package/base-files/files/bin/config_generate
+
+# Modify default theme
+default_theme='opentomcat'
+sed -i "s/bootstrap/$default_theme/g" feeds/luci/modules/luci-base/root/etc/config/luci
 
 # Git sparse clone
 git_sparse_clone() {
@@ -36,11 +41,4 @@ trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
 # Pip3 packages
 pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
 
-# Modify default theme
-default_theme='opentomcat'
-sed -i "s/bootstrap/$default_theme/g" feeds/luci/modules/luci-base/root/etc/config/luci
 
-# Add luci-app-amlogic
-git clone https://github.com/ophub/luci-app-amlogic.git  package-temp/luci-app-amlogic
-mv -f package-temp/luci-app-amlogic/luci-app-amlogic package/lean/
-rm -rf package-temp
