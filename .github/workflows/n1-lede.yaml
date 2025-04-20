@@ -14,6 +14,10 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
 
     steps:
     - name: Free Disk Space (Ubuntu)
