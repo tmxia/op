@@ -1,6 +1,0 @@
-
-config ddns-go 'config'
-	option enabled '1'
-	option listen '[::]:9876'
-	option ttl '300'
-
