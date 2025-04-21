@@ -1,21 +1,30 @@
 #!/bin/bash
 #
-# Copyright (c) 2019-2020 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-# File name: diy-part1.sh
-# Description: OpenWrt DIY script part 1 (Before Update feeds)
-#
 
-# Uncomment a feed source
-#sed -i 's/^#\(.*helloworld\)/\1/' feeds.conf.default
+# Modify default IP   第一行19.07的路径   第二行23.05的路径
+#sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
+sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/luci2/bin/config_generate
 
-# Add a feed source
-#echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
-#echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
+# 修改主机名
+#sed -i 's/LEDE/OpenWrt/g' package/base-files/files/bin/config_generate
+sed -i 's/LEDE/OpenWrt/g' package/base-files/luci2/bin/config_generate
 
-# 替换内核
-#sed -i 's/KERNEL_PATCHVER:=5.15/KERNEL_PATCHVER:=5.4/g' ./target/linux/x86/Makefile
+# 修正俩处错误的翻译
+sed -i 's/<%:Up%>/<%:Move up%>/g' feeds/luci/modules/luci-compat/luasrc/view/cbi/tblsection.htm
+sed -i 's/<%:Down%>/<%:Move down%>/g' feeds/luci/modules/luci-compat/luasrc/view/cbi/tblsection.htm
+
+# 拉取passwall
+rm -rf feeds/luci/applications/luci-app-passwall
+rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,trojan-plus,tuic-client,v2ray-plugin,xray-plugin,geoview}
+git clone https://github.com/xiaorouji/openwrt-passwall --depth=1 package/passwall
+git clone https://github.com/xiaorouji/openwrt-passwall-packages package/passwall-packages
+
+# 临时修复导致的编译失败问题
+sed -i 's/REENTRANT -D_GNU_SOURCE/LARGEFILE64_SOURCE/g' feeds/packages/lang/perl/perlmod.mk
+sed -i 's#GO_PKG_TARGET_VARS.*# #g' feeds/packages/utils/v2dat/Makefile
+
+# 修复v2ray-plugin编译失败
+rm -rf feeds/luci/applications/luci-app-mosdns
+rm -rf feeds/packages/lang/golang
+git clone https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
+
