@@ -19,36 +19,15 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
 
     steps:
-    - name: 创建编译空间挂载点
-      run: |
-        sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
-        
-    - name: 最大化编译空间
-      uses: easimon/maximize-build-space@master
-      with:
-        root-reserve-mb: 2048
-        swap-size-mb: 1024
-        build-mount-path: /workdir
-        overprovision-lvm: 'true'
-        remove-dotnet: 'true'
-        remove-android: 'true'
-        remove-haskell: 'true'
-        remove-codeql: 'true'
-        remove-docker-images: 'true'
-
-    - name: 检查Actions
-      uses: actions/checkout@v4
-
-    - name: 检查服务器配置
+    - name: Check machine configuration
       run: |
         echo "警告⚠"
         echo "分配的服务器性能有限，若选择的插件过多，务必注意CPU性能！"
         echo "云编译建议取消勾选Node.js及其相关插件！"
-        echo "已知CPU型号（降序）：8370C,8272CL,8171M,E5系列"
+        echo "已知CPU型号（降序）：7763,8370C,8272CL,8171M,E5系列"
         echo "--------------------------CPU信息--------------------------"
         echo "CPU物理数量:$(cat /proc/cpuinfo| grep "physical id"| sort| uniq| wc -l)"
         echo -e "CPU核心及版本信息：$(cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c) \n"
@@ -60,139 +39,152 @@ jobs:
         echo -e  "硬盘数量：$(ls /dev/sd* | grep -v [1-9] | wc -l) \n"
         echo "硬盘详情："
         df -Th
+        
+    - name: Before freeing up disk space
+      run: |
+        echo "Before freeing up disk space"
+        echo "=============================================================================="
+        df -hT
+        echo "=============================================================================="
 
-    - name: 初始化编译环境
+    - name: "Optimize Disk Space"
+      uses: "hugoalh/disk-space-optimizer-ghaction@v0.8.1"
+      with:
+        operate_sudo: "True"
+        general_include: ".+"
+        general_exclude: |-
+          ^GCC$
+          ^G\+\+$
+          Clang
+          LLVM
+        docker_include: ".+"
+        docker_prune: "True"
+        docker_clean: "True"
+        apt_prune: "True"
+        apt_clean: "True"
+        homebrew_prune: "True"
+        homebrew_clean: "True"
+        npm_prune: "True"
+        npm_clean: "True"
+        os_swap: "True"
+
+    - name: Freeing up disk space
+      uses: easimon/maximize-build-space@master
+      with: 
+        root-reserve-mb: 10240
+        swap-size-mb: 1
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+
+    - name: Free up disk space complete
+      run: |
+        echo "Free up disk space complete"
+        echo "=============================================================================="
+        df -hT
+        echo "=============================================================================="
+        
+    - name: Checkout
+      uses: actions/checkout@main
+      
+    - name: Initialize environment
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo -E apt-get -qq update -y
-        sudo -E apt-get -qq full-upgrade -y
-        sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
-        bzip2 ccache clang cmake cpio curl device-tree-compiler flex gawk gcc-multilib g++-multilib gettext \
-        genisoimage git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev \
-        libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev \
-        libreadline-dev libssl-dev libtool llvm lrzsz msmtp ninja-build p7zip p7zip-full patch pkgconf \
-        python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion \
-        swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev libfuse-dev
-        sudo -E apt-get -qq autoremove --purge
-        sudo -E apt-get -qq clean
+        sudo -E apt update
+        sudo -E apt -y install $(curl -fsSL https://is.gd/depends_ubuntu_2204)
+        sudo -E apt -y autoremove --purge
+        sudo -E apt -y install libfuse-dev
+        sudo -E apt -y install rename
+        sudo -E apt -y install time
+        sudo -E apt -y install gn
+        sudo -E systemctl daemon-reload
+        sudo -E apt clean
         sudo timedatectl set-timezone "$TZ"
-        echo "硬盘详情："
-        df -Th
+        sudo chown $USER:$GROUPS $GITHUB_WORKSPACE
 
-    - name: 克隆源码
-      working-directory: /workdir
+    - name: Clone source code
+      working-directory: ./
       run: |
-        df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
         cd openwrt
-        useVersionInfo=$(git show -s --date=short --format="date: %cd<br/>commit: %s<br/>commit hash: %H")
-        echo "useVersionInfo=$useVersionInfo" >> $GITHUB_ENV
-        echo "DATE=$(date "+%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
-        echo "tag_name=$(date +%Y%m%d)" >> $GITHUB_ENV
+        sed -i 's|https://github.com/coolsnowwolf/luci.git;openwrt-23.05|https://github.com/coolsnowwolf/luci|g' feeds.conf.default
 
-    - name: 加载DIY_SH
+    - name: cache wrt build
+      uses: stupidloud/cachewrtbuild@main
+      with:
+        ccache: 'true'
+        mixkey: amlogic-${{ env.REPO_BRANCH }}
+        prefix: ${{ github.workspace }}/openwrt
+        
+    - name: Update & Install feeds
+      working-directory: ./openwrt
       run: |
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Load custom config
+      run: |
+        [ -e $FILES ] && mv $FILES openwrt/files
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
         chmod +x $DIY_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_SH
 
-    - name: 更新feeds
-      run: cd openwrt && ./scripts/feeds update -a
+    # - name: SSH connect to Actions
+      # uses: P3TERX/ssh2actions@main
+      # if: (github.event.inputs.ssh == 'true') || contains(github.event.action, 'ssh')
 
-    - name: 安装feeds
-      run: cd openwrt && ./scripts/feeds install -a
-
-    - name: 下载软件包
-      id: package
+    - name: Download package
+      working-directory: ./openwrt
       run: |
-        cd openwrt
         make defconfig
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
-        echo "硬盘详情："
-        df -Th
-                
-    - name: 编译固件
-      id: compile
+
+    - name: Compile the firmware
       run: |
+        chmod -R 755 openwrt
         cd openwrt
         echo -e "$(nproc) thread compile"
         make -j$(nproc) || make -j1 || make -j1 V=s
-        echo "status=success" >> $GITHUB_OUTPUT
-        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+        echo "compile_status=success" >> $GITHUB_ENV
 
-    - name: 清理磁盘空间
-      if: (!cancelled())
-      run: |
-        echo "清理之前："
-        df -hT
-        mkdir openwrt-armvirt
-        mkdir /workdir/upload
-        cp openwrt/bin/targets/*/*/*.tar.gz /workdir/upload/
-        mv openwrt/bin/targets/*/*/*.tar.gz openwrt-armvirt/
-        echo -e "\n"
-        echo "列出空间占用前10的目录或文件："
-        sudo du -h --max-depth=1 /workdir |sort -nr | head -10
-        rm -rf /workdir/openwrt/
-        echo -e "\n"
-        echo "清理之后："
-        df -hT
-        echo -e "\n"
-        echo "/workdir路径文件"
-        ls -l
-        echo -e "\n"
-        echo "列出空间占用前10的目录或文件："
-        sudo du -h --max-depth=1 /workdir |sort -nr | head -10
-        
-    - name: 打包内核
+    - name: Package OpenWrt Firmware
+      if: ${{ env.compile_status }} == 'success' && !cancelled()
       uses: unifreq/openwrt_packit@master
       env:
-        WHOAMI: ham
-        OPENWRT_ARMVIRT: openwrt-armvirt/*.tar.gz
-        PACKAGE_SOC: s905d
+        OPENWRT_ARMVIRT: openwrt/bin/targets/*/*/openwrt-amlogic-mesongx-phicomm_n1-rootfs.tar.gz
+        KERNEL_VERSION_NAME: 6.12.y
         KERNEL_AUTO_LATEST: true
-       # KERNEL_REPO_URL: https://github.com/ham0223/OpenWRT-N1/tree/main/opt
-        KERNEL_REPO_URL: breakingbadboy/OpenWrt
-        KERNEL_VERSION_NAME: 6.6.y
-        
-    - name: 整理文件
-      run: mv /opt/openwrt_packit/output/* /workdir/upload/
-
-    - name: 发布固件
-      uses: ncipollo/release-action@v1
+        PACKAGE_SOC: s905d
+        WHOAMI: tmxia
+        SW_FLOWOFFLOAD: 1
+        SFE_FLOW: 0
+       
+    - name: Upload OpenWrt Firmware to Release
+      uses: ncipollo/release-action@main
+      if: ${{ env.PACKAGED_STATUS == 'success' }} && !cancelled()
       with:
-        name: OpenWrt-N1 → ${{ env.DATE }}
-        tag: N1-23.05_${{ env.tag_name }}
-        artifacts: /workdir/upload/*
+        tag: OpenWrt_lede_${{ env.PACKAGED_OUTPUTDATE }}
+        artifacts: /opt/openwrt_packit/output/*
         allowUpdates: true
         token: ${{ secrets.GITHUB_TOKEN }}
         body: |
-              ---  使用说明 ---
-              
-              源码: ${{ env.REPO_URL }}
-              分支: ${{ env.REPO_BRANCH }}
-
-              网关：192.168.3.3
-              用户名：root
-              密码：password
-
-    - name: 删除运行记录
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        retain_days: 3
-        keep_minimum_runs: 5
-        token: ${{ env.GITHUB_TOKEN }}
-
-    - name: 删除自动发布的旧固件
+          基于lean openwrt构建
+          首次使用建议全新刷写
+          * 基本信息
+          IP: 192.168.3.3
+          账户: root
+          密码: password
+          
+    - name: Delete old releases
       uses: dev-drprasad/delete-older-releases@master
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        keep_latest: 7
+        keep_latest: 10
         delete_tags : true
-        
