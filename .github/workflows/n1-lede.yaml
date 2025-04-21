@@ -10,11 +10,11 @@ on:
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
-  FEEDS_CONF: N1/Lede/LE-feeds.conf.default
-  CONFIG_FILE: N1/Lede/2025-0416.config
-  DIY_P1_SH: N1/Lede/diy-part1.sh
-  DIY_P2_SH: N1/Lede/diy-part2.sh
-  FILES: N1/Lede/files
+  FEEDS_CONF: n1-lede/.conf.default
+  CONFIG_FILE: n1-lede/.config
+  DIY_P1_SH: n1-lede/diy-part1.sh
+  DIY_P2_SH: n1-lede/diy-part2.sh
+  FILES: n1-lede/files
   TZ: Asia/Shanghai
   GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
 
