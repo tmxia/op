@@ -10,10 +10,9 @@ on:
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
-  FEEDS_CONF: n1-lede/.conf.default
+  FEEDS_CONF: n1-lede/feeds.conf.default
   CONFIG_FILE: n1-lede/.config
-  DIY_P1_SH: n1-lede/diy-part1.sh
-  DIY_P2_SH: n1-lede/diy-part2.sh
+  DIY_SH: n1-lede/diy.sh
   FILES: n1-lede/files
   TZ: Asia/Shanghai
   GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
@@ -81,7 +80,6 @@ jobs:
         echo "硬盘详情："
         df -Th
 
-
     - name: 克隆源码
       working-directory: /workdir
       run: |
@@ -94,26 +92,18 @@ jobs:
         echo "DATE=$(date "+%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
         echo "tag_name=$(date +%Y%m%d)" >> $GITHUB_ENV
 
-    - name: 加载DIY_P1
+    - name: 加载DIY_SH
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-        chmod +x $DIY_P1_SH
+        chmod +x $DIY_SH
         cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
+        $GITHUB_WORKSPACE/$DIY_SH
 
     - name: 更新feeds
       run: cd openwrt && ./scripts/feeds update -a
 
     - name: 安装feeds
       run: cd openwrt && ./scripts/feeds install -a
-
-    - name: 加载DIY_P2
-      run: |
-        [ -e $FILES ] && mv $FILES openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
 
     - name: 下载软件包
       id: package
