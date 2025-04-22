@@ -13,7 +13,7 @@ env:
   REPO_BRANCH: master
   FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: .config
-  SCRIPT_SH: n1-lede/script.sh
+  SCRIPT_SH: n1-lede/diy.sh
   CONFIG_SH: n1-lede/config.sh
   SRC_SH: n1-lede/src.sh
   UPLOAD_FIRMWARE: true
