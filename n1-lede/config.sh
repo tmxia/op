@@ -229,7 +229,7 @@ CONFIG_PACKAGE_python3-light=y
 CONFIG_PACKAGE_python3-pkg-resources=y
 # other packages2
 CONFIG_PACKAGE_openwrt-keyring=y
-CONFIG_PACKAGE_vsftpd=y
+CONFIG_PACKAGE_vsftpd=n
 CONFIG_PACKAGE_wget-ssl=y
 CONFIG_PACKAGE_sudo=y
 CONFIG_PACKAGE_file=y
