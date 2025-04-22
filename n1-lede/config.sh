@@ -236,13 +236,4 @@ CONFIG_PACKAGE_file=y
 CONFIG_PACKAGE_logrotate=y
 CONFIG_PACKAGE_coreutils-stat=y
 CONFIG_PACKAGE_lsof=y
-# remove wifi
-CONFIG_PACKAGE_hostapd-common=n
-CONFIG_PACKAGE_iw=n
-CONFIG_PACKAGE_kmod-brcmfmac=n
-CONFIG_PACKAGE_kmod-brcmutil=n
-CONFIG_PACKAGE_kmod-cfg80211=n
-CONFIG_PACKAGE_kmod-mac80211=n
-CONFIG_PACKAGE_wpa-cli=n
-CONFIG_PACKAGE_wpad-basic=n
 EOF
