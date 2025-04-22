@@ -38,7 +38,7 @@ jobs:
         if: ${{ steps.cacheHash.outputs.cache-hit != 'true' }}
         uses: benc-uk/workflow-dispatch@master
         with:
-          workflow: N1
+          workflow: n1
 
       - name: Delete old workflow runs
         uses: Mattraks/delete-workflow-runs@main
