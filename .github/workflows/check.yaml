@@ -1,0 +1,47 @@
+name: Check
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
+  REPO_BRANCH: openwrt-23.05
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  TZ: Asia/Shanghai
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get Commit Hash
+        id: getHash
+        run: |
+          git clone -b $REPO_BRANCH --single-branch --depth=1 $REPO_URL .
+          echo "commitHash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Compare Commit Hash
+        id: cacheHash
+        uses: actions/cache@main
+        with:
+          path: .commitHash
+          key: commitHash_${{ steps.getHash.outputs.commitHash }}
+
+      - name: Save New Commit Hash
+        if: ${{ steps.cacheHash.outputs.cache-hit != 'true' }}
+        run: |
+          echo ${{ steps.getHash.outputs.commitHash }} | tee .commitHash
+
+      - name: Invoke workflow without inputs
+        if: ${{ steps.cacheHash.outputs.cache-hit != 'true' }}
+        uses: benc-uk/workflow-dispatch@master
+        with:
+          workflow: N1
+
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          retain_days: 0
+          keep_minimum_runs: 1
