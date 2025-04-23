@@ -1,3 +1,5 @@
+
 config ttyd
-        option interface '@lan'
-        option command '/bin/login -f root'
+	option interface '@lan'
+	option command '/bin/login -f root'
+

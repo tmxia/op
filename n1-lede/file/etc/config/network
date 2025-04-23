@@ -1,5 +1,6 @@
+
 config interface 'loopback'
-	option ifname 'lo'
+	option device 'lo'
 	option proto 'static'
 	option ipaddr '127.0.0.1'
 	option netmask '255.0.0.0'
@@ -7,24 +8,34 @@ config interface 'loopback'
 config globals 'globals'
 	option packet_steering '1'
 
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth0'
+
 config interface 'lan'
-  option proto 'static'
-  option netmask '255.255.255.0'
-  option ipaddr '192.168.3.3'
-  option gateway '192.168.3.1'
-  option ip6assign '60'
-  option ifname 'eth0'
-  option dns '192.168.3.1'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '192.168.3.3'
+	option netmask '255.255.255.0'
+	option gateway '192.168.3.1'
+        option delegate '0'
+	option broadcast '192.168.3.255'
+	list dns '192.168.3.1'
 
-config interface 'wan'
-	option ifname 'eth0.2'
-	option proto 'pppoe'
-	option ipv6 'auto'
-	option keepalive '0'
-
-config interface 'wan6'
+config interface 'lan6'
+	option device '@lan'
 	option proto 'dhcpv6'
-	option ifname 'eth0.2'
 	option reqaddress 'try'
 	option reqprefix 'auto'
-	option sourcefilter '0'
+	option peerdns '0'
+
+config device
+	option name 'docker0'
+	option type 'bridge'
+
+config interface 'docker'
+	option device 'docker0'
+	option proto 'none'
+	option auto '0'
+
