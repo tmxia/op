@@ -1,13 +1,7 @@
 name: N1-LEDE
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'README.md'
-      - 'script.sh'
-      - 'config.sh'
+  workflow_dispatch:
   #schedule:
     #- cron: 0 8 * * 0
 
