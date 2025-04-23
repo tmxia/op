@@ -16,6 +16,8 @@ downloadSpecificDir(){
 	rm -rf .git
 	cd $cur_path
 }
+# Default IP
+sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 # wireless
 #rm -rf files/etc/config/wireless
 #rm -rf files/etc/modules.d/wireless_enable
@@ -33,6 +35,9 @@ downloadSpecificDir(){
 downloadSpecificDir 'https://github.com/ophub/luci-app-amlogic.git' 'main' 'package/lean/luci-app-amlogic'
 #Add luci-app-passwall
 git clone -b luci https://github.com/xiaorouji/openwrt-passwall.git package/lean/luci-app-passwall
+# Update packages
+rm -rf feeds/luci/applications/luci-app-passwall
+cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luci/applications/
 #Add openclash
 #svn co https://github.com/vernesong/OpenClash/trunk/luci-app-openclash package/lean/luci-app-openclash
 #Add smartdns
@@ -42,3 +47,12 @@ downloadSpecificDir 'https://github.com/o0HalfLife0o/openwrt-ipk.git' 'master' '
 #Add luci-app-adguardhome
 #git clone https://github.com/rufengsuixing/luci-app-adguardhome.git package/lean/luci-app-adguardhome
 #sed -i '/packages/s#coolsnowwolf#o0HalfLife0o#' feeds.conf.default
+# Pip3 conf
+mkdir -p ~/.pip
+echo "[global]
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
+# Pip3 packages
+pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
+# Clean packages
+rm -rf clone
