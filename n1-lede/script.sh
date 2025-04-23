@@ -56,3 +56,6 @@ trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
 pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
 # Clean packages
 rm -rf clone
+# fix xray-core
+rm -rf feeds/packages/lang/golang
+git clone https://github.com/sbwml/packages_lang_golang -b 22.x feeds/packages/lang/golang
