@@ -28,9 +28,6 @@ git clone https://github.com/xiaorouji/openwrt-passwall --depth=1 clone/passwall
 rm -rf feeds/luci/applications/luci-app-passwall
 cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luci/applications/
 
-# Clean packages
-rm -rf clone
-
 # Pip3 conf
 mkdir -p ~/.pip
 echo "[global]
@@ -40,4 +37,6 @@ trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
 # Pip3 packages
 pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
 
+# Clean packages
+rm -rf clone
 
