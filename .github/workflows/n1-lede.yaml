@@ -12,7 +12,7 @@ env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
   FEEDS_CONF: feeds.conf.default
-  CONFIG_FILE:.config
+  CONFIG_FILE: .config
   SCRIPT_SH: n1-lede/script.sh
   CONFIG_SH: n1-lede/config.sh
   SRC_SH: n1-lede/src.sh
