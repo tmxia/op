@@ -16,46 +16,90 @@ downloadSpecificDir(){
 	rm -rf .git
 	cd $cur_path
 }
-# Default IP
-sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
-# wireless
-#rm -rf files/etc/config/wireless
-#rm -rf files/etc/modules.d/wireless_enable
-# Firewall custom
-#echo "iptables -t nat -I POSTROUTING -o eth0 -j MASQUERADE" >> package/network/config/firewall/files/firewall.user
-# geodata
-#wget -q -cP files/usr/share/v2ray https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
-#wget -q -cP files/usr/share/v2ray https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
-# Add luci-theme-opentomcat
-#svn co https://github.com/Leo-Jo-My/luci-theme-opentomcat.git package/lean/luci-theme-opentomcat
-# Add luci-theme-argon
-#rm -rf package/lean/luci-theme-argon
-#git clone -b 18.06 https://github.com/jerrykuku/luci-theme-argon.git package/lean/luci-theme-argon
-#Add amlogic管理
-downloadSpecificDir 'https://github.com/ophub/luci-app-amlogic.git' 'main' 'package/lean/luci-app-amlogic'
-#Add luci-app-passwall
-git clone -b luci https://github.com/xiaorouji/openwrt-passwall.git package/lean/luci-app-passwall
-# Update packages
-rm -rf feeds/luci/applications/luci-app-passwall
-cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luci/applications/
-#Add openclash
-#svn co https://github.com/vernesong/OpenClash/trunk/luci-app-openclash package/lean/luci-app-openclash
-#Add smartdns
-downloadSpecificDir 'https://github.com/o0HalfLife0o/openwrt-ipk.git' 'master' 'package/lean/smartdns'
-#Add luci-app-smartdns
-#git clone -b lede https://github.com/pymumu/luci-app-smartdns.git package/lean/luci-app-smartdns
-#Add luci-app-adguardhome
-#git clone https://github.com/rufengsuixing/luci-app-adguardhome.git package/lean/luci-app-adguardhome
-#sed -i '/packages/s#coolsnowwolf#o0HalfLife0o#' feeds.conf.default
-# Pip3 conf
-mkdir -p ~/.pip
-echo "[global]
-index-url = https://pypi.tuna.tsinghua.edu.cn/simple
-trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
-# Pip3 packages
-pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
-# Clean packages
-rm -rf clone
-# fix xray-core
+
+# 替换默认IP
+sed -i 's#192.168.1.1#192.168.3.3#g' package/base-files/files/bin/config_generate
+
+# cpufreq
+sed -i 's/LUCI_DEPENDS.*/LUCI_DEPENDS:=\@\(arm\|\|aarch64\)/g' feeds/luci/applications/luci-app-cpufreq/Makefile
+sed -i 's/services/system/g' feeds/luci/applications/luci-app-cpufreq/luasrc/controller/cpufreq.lua
+
+# 升级大雕的rust源码到官方最新版本1.85.1
+sed -i 's/PKG_VERSION:=1.84.0/PKG_VERSION:=1.85.1/' feeds/packages/lang/rust/Makefile
+sed -i 's/PKG_HASH:=15cee7395b07ffde022060455b3140366ec3a12cbbea8f1ef2ff371a9cca51bf/PKG_HASH:=0f2995ca083598757a8d9a293939e569b035799e070f419a686b0996fb94238a/' feeds/packages/lang/rust/Makefile
+
+# 移除 lede feeds 自带的番茄核心包
+rm -rf feeds/packages/net/xray-core
+rm -rf feeds/packages/net/v2ray-geodata
+rm -rf feeds/packages/net/sing-box
+rm -rf feeds/packages/net/chinadns-ng
+rm -rf feeds/packages/net/dns2socks
+# rm -rf feeds/packages/net/dns2tcp
+rm -rf feeds/packages/net/microsocks
+cp -r feeds/passwall_packages/xray-core feeds/packages/net
+cp -r feeds/passwall_packages/v2ray-geodata feeds/packages/net
+cp -r feeds/passwall_packages/sing-box feeds/packages/net
+cp -r feeds/passwall_packages/chinadns-ng feeds/packages/net
+cp -r feeds/passwall_packages/dns2socks feeds/packages/net
+# cp -r feeds/passwall_packages/dns2tcp feeds/packages/net
+cp -r feeds/passwall_packages/microsocks feeds/packages/net
+
+# 修改golang源码以编译xray1.8.8+版本
 rm -rf feeds/packages/lang/golang
-git clone https://github.com/sbwml/packages_lang_golang -b 22.x feeds/packages/lang/golang
+git clone https://github.com/sbwml/packages_lang_golang -b 24.x feeds/packages/lang/golang
+sed -i '/-linkmode external \\/d' feeds/packages/lang/golang/golang-package.mk
+
+# 修改frp版本为官网最新v0.61.2 https://github.com/fatedier/frp
+#/rm -rf feeds/packages/net/frp
+#wget https://github.com/coolsnowwolf/packages/archive/0f7be9fc93d68986c179829d8199824d3183eb60.zip -O OldPackages.zip
+#unzip OldPackages.zip
+#cp -r packages-0f7be9fc93d68986c179829d8199824d3183eb60/net/frp feeds/packages/net/
+#rm -rf OldPackages.zip packages-0f7be9fc93d68986c179829d8199824d3183eb60s
+
+#sed -i 's/PKG_VERSION:=0.53.2/PKG_VERSION:=0.61.2/' feeds/packages/net/frp/Makefile
+#sed -i 's/PKG_HASH:=ff2a4f04e7732bc77730304e48f97fdd062be2b142ae34c518ab9b9d7a3b32ec/PKG_HASH:=19600d944e05f7ed95bac53c18cbae6ce7eff859c62b434b0c315ca72acb1d3c/' feeds/packages/net/frp/Makefile
+
+# 修改tailscale版本为官网最新v1.80.3 https://github.com/tailscale/tailscale 格式：https://codeload.github.com/tailscale/tailscale/tar.gz/v$(PKG_VERSION)?
+sed -i 's/PKG_VERSION:=1.76.1/PKG_VERSION:=1.80.3/' feeds/packages/net/tailscale/Makefile
+sed -i 's/PKG_HASH:=ce87e52fd4e8e52540162a2529c5d73f5f76c6679147a7887058865c9e01ec36/PKG_HASH:=4ea7d4c1a4e86905f330f5d5f5288488cb29d6c586d5bcabf9d02c5481ba740d/' feeds/packages/net/tailscale/Makefile
+rm -rf feeds/packages/net/tailscale/patches
+
+# 跟随最新版naiveproxy
+rm -rf feeds/passwall_packages/naiveproxy
+rm -rf feeds/helloworld/naiveproxy
+git clone -b v5 https://github.com/sbwml/openwrt_helloworld.git
+cp -r openwrt_helloworld/naiveproxy feeds/passwall_packages
+cp -r openwrt_helloworld/naiveproxy feeds/helloworld
+
+# 科学上网插件依赖
+wget https://codeload.github.com/vernesong/OpenClash/zip/refs/heads/master -O OpenClash.zip
+unzip OpenClash.zip
+cp -r OpenClash-master/luci-app-openclash package/
+rm -rf OpenClash.zip OpenClash-master
+# 编译 po2lmo (如果有po2lmo可跳过)
+pushd package/luci-app-openclash/tools/po2lmo
+make && sudo make install
+popd
+
+# 添加luci-app-amlogic / 晶晨宝盒
+git clone https://github.com/ophub/luci-app-amlogic.git
+cp -r luci-app-amlogic/luci-app-amlogic package/luci-app-amlogic
+rm -rf luci-app-amlogic
+
+#添加smartdns
+git clone https://github.com/kiddin9/smartdns-le package/smartdns-le
+git clone https://github.com/kenzok8/openwrt-packages.git
+cp -r openwrt-packages/luci-app-smartdns package/luci-app-smartdns
+rm -rf openwrt-packages
+sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.2021.34/' feeds/packages/net/smartdns/Makefile
+sed -i 's/PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=756029f5e9879075c042030bd3aa3db06d700270/' feeds/packages/net/smartdns/Makefile
+sed -i 's/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=c2979d956127946861977781beb3323ad9a614ae55014bc99ad39beb7a27d481/' feeds/packages/net/smartdns/Makefile
+
+#修改makefile
+find package/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i 's/include\ \.\.\/\.\.\/luci\.mk/include \$(TOPDIR)\/feeds\/luci\/luci\.mk/g' {}
+find package/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i 's/include\ \.\.\/\.\.\/lang\/golang\/golang\-package\.mk/include \$(TOPDIR)\/feeds\/packages\/lang\/golang\/golang\-package\.mk/g' {}
+find package/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i 's/PKG_SOURCE_URL:=\@GHREPO/PKG_SOURCE_URL:=https:\/\/github\.com/g' {}
+find package/*/ -maxdepth 2 -path "*/Makefile" | xargs -i sed -i 's/PKG_SOURCE_URL:=\@GHCODELOAD/PKG_SOURCE_URL:=https:\/\/codeload\.github\.com/g' {}
+
+#修改xfsprogs的Makefile
+sed -i 's/TARGET_CFLAGS += -DHAVE_MAP_SYNC/TARGET_CFLAGS += -DHAVE_MAP_SYNC -D_LARGEFILE64_SOURCE/' feeds/packages/utils/xfsprogs/Makefile
