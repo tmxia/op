@@ -25,20 +25,20 @@ function git_sparse_clone() {
 # git clone --depth 1 https://github.com/brvphoenix/wrtbwmon package/wrtbwmon
 # git clone --depth 1 https://github.com/brvphoenix/luci-app-wrtbwmon package/luci-app-wrtbwmon
 
-git clone --depth=1 https://github.com/ximiTech/msd_lite package/msd_lite
-git clone --depth=1 https://github.com/ximiTech/luci-app-msd_lite package/luci-app-msd_lite
+# git clone --depth=1 https://github.com/ximiTech/msd_lite package/msd_lite
+# git clone --depth=1 https://github.com/ximiTech/luci-app-msd_lite package/luci-app-msd_lite
 
-git clone --depth=1 https://github.com/kenzok8/small-package package/small
-mv package/small/luci-app-openclash package/luci-app-openclash
-mv package/small/iptvhelper package/iptvhelper
-mv package/small/luci-app-iptvhelper package/luci-app-iptvhelper
-mv package/small/luci-app-timecontrol package/luci-app-timecontrol
-mv package/small/cdnspeedtest package/cdnspeedtest
-mv package/small/luci-app-cloudflarespeedtest package/luci-app-cloudflarespeedtest
-mv package/small/luci-app-dnsfilter package/luci-app-dnsfilter
+# git clone --depth=1 https://github.com/kenzok8/small-package package/small
+# mv package/small/luci-app-openclash package/luci-app-openclash
+# mv package/small/iptvhelper package/iptvhelper
+# mv package/small/luci-app-iptvhelper package/luci-app-iptvhelper
+# mv package/small/luci-app-timecontrol package/luci-app-timecontrol
+# mv package/small/cdnspeedtest package/cdnspeedtest
+# mv package/small/luci-app-cloudflarespeedtest package/luci-app-cloudflarespeedtest
+# mv package/small/luci-app-dnsfilter package/luci-app-dnsfilter
 mv package/small/luci-app-fileassistant package/luci-app-fileassistant
-rm -rf feeds/luci/applications/luci-app-wol
-mv package/small/luci-app-wolplus feeds/luci/applications/luci-app-wolplus
+# rm -rf feeds/luci/applications/luci-app-wol
+# mv package/small/luci-app-wolplus feeds/luci/applications/luci-app-wolplus
 # mv package/small/luci-app-msd_lite package/luci-app-msd_lite
 # mv package/small/netdata package/netdata
 # mv package/small/luci-app-netdata package/luci-app-netdata
@@ -47,7 +47,7 @@ mv package/small/luci-app-wolplus feeds/luci/applications/luci-app-wolplus
 # mv package/small/qt6tools package/qt6tools
 # mv package/small/rblibtorrent package/rblibtorrent
 # mv package/small/luci-app-qbittorrent package/luci-app-qbittorrent
-mv package/small/luci-app-wechatpush package/luci-app-wechatpush
+# mv package/small/luci-app-wechatpush package/luci-app-wechatpush
 mv package/small/luci-app-poweroff package/luci-app-poweroff
 # mv package/small/wrtbwmon package/wrtbwmon
 # mv package/small/luci-app-wrtbwmon package/luci-app-wrtbwmon
@@ -59,13 +59,11 @@ git clone -b 18.06 --single-branch --depth 1 https://github.com/jerrykuku/luci-t
 git clone -b 18.06 --single-branch --depth 1 https://github.com/jerrykuku/luci-app-argon-config package/luci-app-argon-config
 git clone --depth=1 https://github.com/ophub/luci-app-amlogic package/amlogic
 git clone --depth=1 https://github.com/sirpdboy/luci-app-ddns-go package/ddnsgo
-#git clone --depth=1 https://github.com/sirpdboy/NetSpeedTest package/NetSpeedTest
+# git clone --depth=1 https://github.com/sirpdboy/NetSpeedTest package/NetSpeedTest
 
-
-
-git clone -b v5-lua --single-branch --depth 1 https://github.com/sbwml/luci-app-mosdns package/mosdns
-git clone -b lua --single-branch --depth 1 https://github.com/sbwml/luci-app-alist package/alist
-#git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git package/lucky
+# git clone -b v5-lua --single-branch --depth 1 https://github.com/sbwml/luci-app-mosdns package/mosdns
+# git clone -b lua --single-branch --depth 1 https://github.com/sbwml/luci-app-alist package/alist
+# git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git package/lucky
 
 # Remove packages
 #删除lean库中的插件，使用自定义源中的包。
@@ -83,7 +81,7 @@ rm -rf feeds/packages/net/ddns-go
 # rm -rf feeds/packages/net/frp
 # rm -rf feeds/luci/applications/luci-app-frps
 # rm -rf feeds/luci/applications/luci-app-frpc
-rm -rf feeds/packages/net/msd_lite
+# rm -rf feeds/packages/net/msd_lite
 # rm -rf feeds/luci/applications/luci-app-wrtbwmon
 # rm -rf feeds/packages/admin/netdata
 # rm -rf feeds/luci/applications/luci-app-netdata
@@ -93,12 +91,21 @@ rm -rf feeds/packages/net/msd_lite
 rm -rf feeds/luci/applications/luci-app-serverchan
 
 # 1 启用 frps
-rm -rf feeds/packages/net/frp
-git clone https://github.com/kuoruan/openwrt-frp feeds/packages/net/frp
+# rm -rf feeds/packages/net/frp
+# git clone https://github.com/kuoruan/openwrt-frp feeds/packages/net/frp
 # git clone https://github.com/kuoruan/openwrt-frp -b v0.53.2-1 feeds/packages/net/frp
 # git clone https://github.com/user1121114685/frp.git feeds/packages/net/frp
 # rm -rf feeds/luci/applications/luci-app-frps
 # git clone https://github.com/user1121114685/luci-app-frps.git feeds/luci/applications/luci-app-frps
+
+# 设置Pip3源
+mkdir -p ~/.pip
+echo "[global]
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
+
+# 安装Pip3
+pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
 
 # Default IP
 #sed -i 's/192.168.1.1/192.168.6.50/g' package/base-files/files/bin/config_generate
@@ -114,7 +121,7 @@ sed -i 's/LEDE/N1/g' package/base-files/luci2/bin/config_generate
 
 # Modify default IP   第一行19.07的路径   第二行23.05的路径
 #sed -i 's/192.168.1.1/192.168.123.2/g' package/base-files/files/bin/config_generate
-sed -i 's/192.168.1.1/192.168.6.50/g' package/base-files/luci2/bin/config_generate
+sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/luci2/bin/config_generate
 
 # golang版本修复
 rm -rf feeds/packages/lang/golang
