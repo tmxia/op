@@ -12,15 +12,11 @@ config interface 'lan'
 	option ifname 'eth0'
 	option proto 'static'
 	option netmask '255.255.255.0'
-	option gateway '192.168.3.1'
-	option dns '192.168.3.1'
-	option ipaddr '192.168.3.3'
+	option gateway '192.168.6.1'
+	option dns '192.168.6.1'
+	option ipaddr '192.168.6.100'
 
-config device
-	option name 'docker0'
-	option type 'bridge'
-
-config interface 'docker'
-	option device 'docker0'
+config interface 'vpn0'
+	option ifname 'tun0'
 	option proto 'none'
-	option auto '0'
+
