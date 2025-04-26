@@ -28,6 +28,17 @@ git clone -b v5-lua --single-branch --depth 1 https://github.com/sbwml/luci-app-
 # git_sparse_clone main https://github.com/kiddin9/kwrt-packages luci-app-ddns-go
 # Remove packages
 
+#删除lean库中的插件，使用自定义源中的包。
+rm -rf feeds/luci/applications/luci-app-passwall
+rm -rf feeds/packages/net/v2ray-geodata
+rm -rf feeds/luci/themes/luci-theme-argon
+rm -rf feeds/luci/applications/luci-app-argon-config
+rm -rf feeds/packages/net/mosdns
+rm -rf feeds/packages/utils/v2dat
+rm -rf feeds/luci/applications/luci-app-mosdns
+#rm -rf feeds/luci/themes/luci-theme-design
+#rm -rf feeds/luci/applications/luci-app-design-config
+
 # Update packages
 rm -rf feeds/luci/applications/luci-app-passwall
 cp -rf clone/amlogic/luci-app-amlogic clone/passwall/luci-app-passwall feeds/luci/applications/
@@ -41,17 +52,6 @@ trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
 # Pip3 packages
 pip install --upgrade pip
 pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
-
-#删除lean库中的插件，使用自定义源中的包。
-rm -rf feeds/luci/applications/luci-app-passwall
-rm -rf feeds/packages/net/v2ray-geodata
-rm -rf feeds/luci/themes/luci-theme-argon
-rm -rf feeds/luci/applications/luci-app-argon-config
-rm -rf feeds/packages/net/mosdns
-rm -rf feeds/packages/utils/v2dat
-rm -rf feeds/luci/applications/luci-app-mosdns
-#rm -rf feeds/luci/themes/luci-theme-design
-#rm -rf feeds/luci/applications/luci-app-design-config
 
 # Default IP
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
