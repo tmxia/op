@@ -34,6 +34,7 @@ index-url = https://pypi.tuna.tsinghua.edu.cn/simple
 trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
 
 # Pip3 packages
+pip install --upgrade pip
 pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil docker
 
 #删除lean库中的插件，使用自定义源中的包。
