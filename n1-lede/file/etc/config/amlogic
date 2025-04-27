@@ -1,3 +1,4 @@
+
 config amlogic 'config'
 	option enable '1'
 	option amlogic_firmware_repo 'https://github.com/tmxia/my-openwrt'
