@@ -1,3 +1,4 @@
+
 config core 'main'
 	option resourcebase '/luci-static/resources'
 	option lang 'zh_cn'
