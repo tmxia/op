@@ -42,5 +42,6 @@ sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generat
 #修改默认时间格式
 sed -i 's/os.date()/os.date("%Y-%m-%d %H:%M:%S %A")/g' $(find ./package/*/autocore/files/ -type f -name "index.htm")
 
-# 修改默认主题为bootstrap
-sed -i 's|option theme.*|option theme "bootstrap"|' /etc/config/luci
+#修改默认主题为bootstrap
+sed -i '/option mediaurlbase/s|".*"|"/luci-static/bootstrap"|' /etc/config/luci
+
