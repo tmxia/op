@@ -13,9 +13,9 @@ env:
   REPO_BRANCH: master
   FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: .config
-  SCRIPT_SH: script.sh
-  CONFIG_SH: config.sh
-  SRC_SH: src.sh
+  SCRIPT_SH: n1-le/script.sh
+  CONFIG_SH: n1-le/config.sh
+  SRC_SH: n1-le/src.sh
   UPLOAD_FIRMWARE: true
   TZ: Asia/Shanghai
   
