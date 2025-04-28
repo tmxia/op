@@ -1,4 +1,4 @@
-name: N1-OpenWrt
+name: LEDE-N1
 
 on:
   workflow_dispatch:
