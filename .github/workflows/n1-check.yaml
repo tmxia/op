@@ -1,4 +1,4 @@
-name: Check
+name: N1-IMM-Check
 
 on:
   schedule:
