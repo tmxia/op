@@ -16,6 +16,15 @@ config interface 'lan'
   option ifname 'eth0'
   option dns '192.168.3.3'
 
+config device
+	option type 'bridge'
+	option name 'docker0'
+
+config interface 'docker'
+	option ifname 'docker0'
+	option proto 'none'
+	option auto '0'
+
 config interface 'wan'
 	option ifname 'eth0.2'
 	option proto 'pppoe'
