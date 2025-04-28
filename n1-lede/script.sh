@@ -2,17 +2,26 @@
 cd openwrt
 
 # Add luci-app-adguardhome
-git clone https://github.com/rufengsuixing/luci-app-adguardhome.git package-temp/luci-app-adguardhome
-mv -f package-temp/luci-app-adguardhome package/lean/
-rm -rf package-temp
+# git clone https://github.com/rufengsuixing/luci-app-adguardhome.git package-temp/luci-app-adguardhome
+# mv -f package-temp/luci-app-adguardhome package/lean/
+# rm -rf package-temp
 
 # Add luci-theme-opentomcat
-git clone https://github.com/Leo-Jo-My/luci-theme-opentomcat.git theme-temp/luci-theme-opentomcat
-rm -rf theme-temp/luci-theme-opentomcat/LICENSE
-rm -rf theme-temp/luci-theme-opentomcat/README.md
-mv -f theme-temp/luci-theme-opentomcat package/lean/
+# git clone https://github.com/Leo-Jo-My/luci-theme-opentomcat.git theme-temp/luci-theme-opentomcat
+# rm -rf theme-temp/luci-theme-opentomcat/LICENSE
+# rm -rf theme-temp/luci-theme-opentomcat/README.md
+# mv -f theme-temp/luci-theme-opentomcat package/lean/
+
+# Add luci-app-passwall
+git clone https://github.com/xiaorouji/openwrt-passwall package/openwrt-passwall.git package-temp/luci-app-passwall
+mv -f package-temp/luci-app-passwall package/lean/
+rm -rf package-temp
+
+# Add luci-theme-argon
+git clone -b 18.06 --single-branch --depth 1 https://github.com/jerrykuku/luci-theme-argon package/luci-theme-argon
+mv -f theme-temp/luci-theme-argon package/lean/
 rm -rf theme-temp
-default_theme='opentomcat'
+default_theme='bootstrap'
 sed -i "s/bootstrap/$default_theme/g" feeds/luci/modules/luci-base/root/etc/config/luci
 
 # Add luci-app-amlogic
