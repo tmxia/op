@@ -121,12 +121,13 @@ CONFIG_PACKAGE_lsattr=y
 CONFIG_PACKAGE_lsblk=y
 # CONFIG_PACKAGE_luci-app-accesscontrol is not set
 CONFIG_PACKAGE_luci-app-amlogic=y
+CONFIG_PACKAGE_luci-app-dockerman=y
 # CONFIG_PACKAGE_luci-app-arpbind is not set
 CONFIG_PACKAGE_luci-app-ddns=y
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 # CONFIG_PACKAGE_luci-app-nps is not set
 # CONFIG_PACKAGE_luci-app-openclash is not set
-# CONFIG_PACKAGE_luci-app-passwall is not set
+CONFIG_PACKAGE_luci-app-passwall=y
 # CONFIG_PACKAGE_luci-app-passwall2 is not set
 # CONFIG_PACKAGE_luci-app-ssr-plus is not set
 # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Brook is not set
@@ -134,13 +135,13 @@ CONFIG_PACKAGE_luci-app-nlbwmon=y
 # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_IPv6_Nat is not set
 # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_NaiveProxy is not set
 # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_V2ray is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Brook is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Hysteria is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_IPv6_Nat is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_NaiveProxy is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Libev_Server is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Trojan_GO is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray_Plugin is not set
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Brook=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Hysteria=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_IPv6_Nat=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_NaiveProxy=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Libev_Server=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Trojan_GO=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray_Plugin=y
 # CONFIG_PACKAGE_luci-app-rclone_INCLUDE_rclone-ng is not set
 # CONFIG_PACKAGE_luci-app-rclone_INCLUDE_rclone-webui is not set
 # CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Hysteria is not set
@@ -155,11 +156,11 @@ CONFIG_PACKAGE_luci-app-nlbwmon=y
 # CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Trojan is not set
 # CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_V2ray_Plugin is not set
 CONFIG_PACKAGE_luci-app-ttyd=y
-# CONFIG_PACKAGE_luci-app-turboacc is not set
-# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA is not set
-# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING is not set
-# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_PDNSD is not set
-# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_CM is not set
+CONFIG_PACKAGE_luci-app-turboacc=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_PDNSD=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_CM=y
 # CONFIG_PACKAGE_luci-app-unblockmusic_INCLUDE_UnblockNeteaseMusic_Go is not set
 # CONFIG_PACKAGE_luci-app-v2raya is not set
 CONFIG_PACKAGE_luci-app-upnp=y
@@ -267,4 +268,60 @@ CONFIG_PACKAGE_iptables-mod-iprange=y
 CONFIG_PACKAGE_kmod-ipt-conntrack-extra=y
 CONFIG_PACKAGE_kmod-ipt-iprange=y
 CONFIG_PACKAGE_kmod-tcp-bbr=y
+# lib
+CONFIG_PACKAGE_musl-fts=y
+CONFIG_PACKAGE_libip4tc2=y
+CONFIG_PACKAGE_libip6tc2=y
+CONFIG_PACKAGE_libsepol=y
+CONFIG_PACKAGE_libselinux=y
+CONFIG_PACKAGE_iptables-nft=y
+CONFIG_PACKAGE_ip6tables-zz-legacy=y
+CONFIG_PACKAGE_xtables-legacy=y
+CONFIG_PACKAGE_ibexpat=y
+CONFIG_PACKAGE_procd-selinux=y
+CONFIG_PACKAGE_nftables-nojson=y
+CONFIG_PACKAGE_firewall=y
+# kmod
+CONFIG_PACKAGE_kmod-nft-socket=y
+CONFIG_PACKAGE_kmod-nft-tproxy=y
+CONFIG_PACKAGE_kmod-nft-nat=y
+# python3
+CONFIG_PACKAGE_libffi=y
+CONFIG_PACKAGE_libgdbm=y
+CONFIG_PACKAGE_libsqlite3-0=y
+CONFIG_PACKAGE_libpython3-3.11=y
+CONFIG_PACKAGE_python3-base=y
+CONFIG_PACKAGE_python3-asyncio=y
+CONFIG_PACKAGE_python3-email=y
+CONFIG_PACKAGE_python3-cgi=y
+CONFIG_PACKAGE_python3-pydoc=y
+CONFIG_PACKAGE_python3-cgitb=y
+CONFIG_PACKAGE_python3-codecs=y
+CONFIG_PACKAGE_python3-ctypes=y
+CONFIG_PACKAGE_python3-dbm=y
+CONFIG_PACKAGE_python3-decimal=y
+CONFIG_PACKAGE_python3-distutils=y
+CONFIG_PACKAGE_python3-logging=y
+CONFIG_PACKAGE_python3-lzma=y
+CONFIG_PACKAGE_python3-multiprocessing=y
+CONFIG_PACKAGE_python3-ncurses=y
+CONFIG_PACKAGE_python3-openssl=y
+CONFIG_PACKAGE_python3-readline=y
+CONFIG_PACKAGE_python3-sqlite3=y
+CONFIG_PACKAGE_python3-unittest=y
+CONFIG_PACKAGE_python3-urllib=y
+CONFIG_PACKAGE_python3-uuid=y
+CONFIG_PACKAGE_python3-xml=y
+CONFIG_PACKAGE_python3-light=y
+CONFIG_PACKAGE_python3-pkg-resources=y
+# other packages2
+CONFIG_PACKAGE_docker-compose=y
+CONFIG_PACKAGE_openwrt-keyring=y
+CONFIG_PACKAGE_vsftpd=y
+CONFIG_PACKAGE_wget-ssl=y
+CONFIG_PACKAGE_sudo=y
+CONFIG_PACKAGE_file=y
+CONFIG_PACKAGE_logrotate=y
+CONFIG_PACKAGE_coreutils-stat=y
+CONFIG_PACKAGE_lsof=y
 EOF
