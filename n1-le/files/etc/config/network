@@ -1,3 +1,4 @@
+
 config interface 'loopback'
 	option ifname 'lo'
 	option proto 'static'
@@ -8,13 +9,13 @@ config globals 'globals'
 	option packet_steering '1'
 
 config interface 'lan'
-  option proto 'static'
-  option netmask '255.255.255.0'
-  option ipaddr '192.168.3.3'
-  option gateway '192.168.3.3'
-  option ip6assign '60'
-  option ifname 'eth0'
-  option dns '192.168.3.3'
+	option proto 'static'
+	option netmask '255.255.255.0'
+	option ipaddr '192.168.3.3'
+	option gateway '192.168.3.3'
+	option ip6assign '60'
+	option ifname 'eth0'
+	option dns '192.168.3.3'
 
 config device
 	option type 'bridge'
