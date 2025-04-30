@@ -1,4 +1,5 @@
 
+
 config defaults
 	option syn_flood '1'
 	option input 'ACCEPT'
@@ -135,12 +136,49 @@ config rule
 config include
 	option path '/etc/firewall.user'
 
+config include 'zerotier'
+	option type 'script'
+	option path '/etc/zerotier.start'
+	option reload '1'
+
 config zone 'docker'
 	option network 'docker'
 	option input 'ACCEPT'
 	option output 'ACCEPT'
 	option forward 'ACCEPT'
 	option name 'docker'
+
+config include 'socat'
+	option type 'script'
+	option path '/var/etc/socat.include'
+	option reload '1'
+
+config rule 'openvpn'
+	option name 'openvpn'
+	option target 'ACCEPT'
+	option src 'wan'
+	option proto 'tcp udp'
+	option dest_port '1194'
+
+config zone 'vpn'
+	option name 'vpn'
+	option input 'ACCEPT'
+	option forward 'ACCEPT'
+	option output 'ACCEPT'
+	option masq '1'
+	option network 'vpn0'
+
+config forwarding 'vpntowan'
+	option src 'vpn'
+	option dest 'wan'
+
+config forwarding 'vpntolan'
+	option src 'vpn'
+	option dest 'lan'
+
+config forwarding 'lantovpn'
+	option src 'lan'
+	option dest 'vpn'
 
 config include 'passwall'
 	option type 'script'
