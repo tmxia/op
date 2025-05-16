@@ -99,7 +99,6 @@ jobs:
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
         KERNEL_VERSION_NAME: 6.12.y
         PACKAGE_SOC: diy
-        GZIP_IMGS: .xz
         SCRIPT_DIY_PATH: n1/mk_s905d_n1.sh
         WHOAMI: tmxia
         SW_FLOWOFFLOAD: 0
