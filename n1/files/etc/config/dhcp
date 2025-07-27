@@ -19,7 +19,6 @@ config dnsmasq
 	option dns_redirect '1'
 	option ednspacket_max '1232'
 	list server '127.0.0.1#5053'
-	list server '127.0.0.1#5054'
 
 config dhcp 'lan'
 	option interface 'lan'
@@ -37,4 +36,3 @@ config odhcpd 'odhcpd'
 	option leasefile '/tmp/hosts/odhcpd'
 	option leasetrigger '/usr/sbin/odhcpd-update'
 	option loglevel '4'
-
