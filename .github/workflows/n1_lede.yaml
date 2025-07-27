@@ -24,7 +24,6 @@ env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
   REPO: openwrt
-  # 修复：移除所有嵌套的环境变量引用
   UPLOAD_FIRMWARE: false
   UPLOAD_RELEASE: true
   RECENT_LASTEST: 30
@@ -41,7 +40,6 @@ jobs:
     - name: 检出仓库
       uses: actions/checkout@v3
       
-    # 修复：在步骤中设置路径变量
     - name: 设置配置路径
       id: set_paths
       run: |
@@ -60,8 +58,6 @@ jobs:
           exit 1
         fi
         echo "✅ 找到配置目录: ${{ env.CONFIG_PATH }}"
-        echo "配置文件: ${{ env.CONFIG_FILE }}"
-        echo "自定义脚本: ${{ env.DIY_my_SH }}"
 
     - name: 初始化环境
       env:
@@ -90,10 +86,15 @@ jobs:
         sudo swapon /mnt/swapfile
         free -h | grep -i swap
 
+    # 修复：确保/builder目录存在
+    - name: 创建构建目录
+      run: |
+        sudo mkdir -p /builder
+        sudo chown -R $USER:$USER /builder
+
     - name: 克隆LEDE源码
       working-directory: /builder
       run: |
-        mkdir -p /builder
         git clone ${{ env.REPO_URL }} -b ${{ env.REPO_BRANCH }} openwrt
         ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
         cd openwrt
