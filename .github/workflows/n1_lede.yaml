@@ -24,12 +24,7 @@ env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
   REPO: openwrt
-  CONFIG_PATH: ${{ github.workspace }}/n1_lede
-  FEEDS_CONF: ${{ env.CONFIG_PATH }}/feeds.conf.default
-  CONFIG_FILE: ${{ env.CONFIG_PATH }}/ARMv8_lede_lua.config
-  DIY_feeds_SH: ${{ env.CONFIG_PATH }}/lede_diy-part1.sh
-  DIY_breakings_SH: ${{ env.CONFIG_PATH }}/breakings_diy-part2.sh
-  DIY_my_SH: ${{ env.CONFIG_PATH }}/ARMv8_lede_lua_diy-part2.sh
+  # 修复：移除所有嵌套的环境变量引用
   UPLOAD_FIRMWARE: false
   UPLOAD_RELEASE: true
   RECENT_LASTEST: 30
@@ -45,14 +40,28 @@ jobs:
     steps:
     - name: 检出仓库
       uses: actions/checkout@v3
+      
+    # 修复：在步骤中设置路径变量
+    - name: 设置配置路径
+      id: set_paths
+      run: |
+        CONFIG_PATH="$GITHUB_WORKSPACE/n1_lede"
+        echo "CONFIG_PATH=$CONFIG_PATH" >> $GITHUB_ENV
+        echo "FEEDS_CONF=$CONFIG_PATH/feeds.conf.default" >> $GITHUB_ENV
+        echo "CONFIG_FILE=$CONFIG_PATH/ARMv8_lede_lua.config" >> $GITHUB_ENV
+        echo "DIY_feeds_SH=$CONFIG_PATH/lede_diy-part1.sh" >> $GITHUB_ENV
+        echo "DIY_breakings_SH=$CONFIG_PATH/breakings_diy-part2.sh" >> $GITHUB_ENV
+        echo "DIY_my_SH=$CONFIG_PATH/ARMv8_lede_lua_diy-part2.sh" >> $GITHUB_ENV
 
     - name: 验证配置目录
       run: |
-        if [ ! -d "$CONFIG_PATH" ]; then
+        if [ ! -d "${{ env.CONFIG_PATH }}" ]; then
           echo "❌ 错误：n1_lede 配置目录不存在"
           exit 1
         fi
-        echo "✅ 找到配置目录: $CONFIG_PATH"
+        echo "✅ 找到配置目录: ${{ env.CONFIG_PATH }}"
+        echo "配置文件: ${{ env.CONFIG_FILE }}"
+        echo "自定义脚本: ${{ env.DIY_my_SH }}"
 
     - name: 初始化环境
       env:
@@ -85,7 +94,7 @@ jobs:
       working-directory: /builder
       run: |
         mkdir -p /builder
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        git clone ${{ env.REPO_URL }} -b ${{ env.REPO_BRANCH }} openwrt
         ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
         cd openwrt
         useVersionInfo=$(git show -s --date=short --format="提交人: %an<br/>提交时间: %cd<br/>提交内容: %s<br/>commit hash: %H")
@@ -97,9 +106,9 @@ jobs:
     - name: 应用N1配置
       run: |
         echo "➡️ 复制配置文件到OpenWrt目录"
-        cp -f $CONFIG_PATH/*.config $GITHUB_WORKSPACE/openwrt/
-        cp -f $CONFIG_PATH/*.sh $GITHUB_WORKSPACE/openwrt/
-        cp -f $FEEDS_CONF $GITHUB_WORKSPACE/openwrt/feeds.conf.default
+        cp -f ${{ env.CONFIG_PATH }}/*.config $GITHUB_WORKSPACE/openwrt/
+        cp -f ${{ env.CONFIG_PATH }}/*.sh $GITHUB_WORKSPACE/openwrt/
+        cp -f ${{ env.FEEDS_CONF }} $GITHUB_WORKSPACE/openwrt/feeds.conf.default
         echo "✅ 配置已应用"
 
     - name: 缓存依赖项
