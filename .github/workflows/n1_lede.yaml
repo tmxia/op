@@ -45,7 +45,6 @@ jobs:
       run: |
         CONFIG_PATH="$GITHUB_WORKSPACE/n1_lede"
         echo "CONFIG_PATH=$CONFIG_PATH" >> $GITHUB_ENV
-        echo "FEEDS_CONF=$CONFIG_PATH/feeds.conf.default" >> $GITHUB_ENV
         echo "CONFIG_FILE=$CONFIG_PATH/ARMv8_lede_lua.config" >> $GITHUB_ENV
         echo "DIY_feeds_SH=$CONFIG_PATH/lede_diy-part1.sh" >> $GITHUB_ENV
         echo "DIY_breakings_SH=$CONFIG_PATH/breakings_diy-part2.sh" >> $GITHUB_ENV
@@ -53,11 +52,34 @@ jobs:
 
     - name: 验证配置目录
       run: |
+        echo "验证配置目录: ${{ env.CONFIG_PATH }}"
         if [ ! -d "${{ env.CONFIG_PATH }}" ]; then
           echo "❌ 错误：n1_lede 配置目录不存在"
           exit 1
         fi
-        echo "✅ 找到配置目录: ${{ env.CONFIG_PATH }}"
+        
+        # 检查必需文件是否存在
+        required_files=(
+          "${{ env.CONFIG_FILE }}"
+          "${{ env.DIY_feeds_SH }}"
+          "${{ env.DIY_breakings_SH }}"
+          "${{ env.DIY_my_SH }}"
+        )
+        
+        missing_files=()
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            missing_files+=("$file")
+          fi
+        done
+        
+        if [ ${#missing_files[@]} -gt 0 ]; then
+          echo "❌ 错误：缺少以下必需文件："
+          printf "  - %s\n" "${missing_files[@]}"
+          exit 1
+        fi
+        
+        echo "✅ 所有必需文件存在"
 
     - name: 初始化环境
       env:
@@ -86,7 +108,6 @@ jobs:
         sudo swapon /mnt/swapfile
         free -h | grep -i swap
 
-    # 修复：确保/builder目录存在
     - name: 创建构建目录
       run: |
         sudo mkdir -p /builder
@@ -107,9 +128,21 @@ jobs:
     - name: 应用N1配置
       run: |
         echo "➡️ 复制配置文件到OpenWrt目录"
-        cp -f ${{ env.CONFIG_PATH }}/*.config $GITHUB_WORKSPACE/openwrt/
-        cp -f ${{ env.CONFIG_PATH }}/*.sh $GITHUB_WORKSPACE/openwrt/
-        cp -f ${{ env.FEEDS_CONF }} $GITHUB_WORKSPACE/openwrt/feeds.conf.default
+        
+        # 复制配置文件
+        cp -f ${{ env.CONFIG_PATH }}/*.config $GITHUB_WORKSPACE/openwrt/ || true
+        
+        # 复制脚本文件
+        cp -f ${{ env.CONFIG_PATH }}/*.sh $GITHUB_WORKSPACE/openwrt/ || true
+        
+        # 检查feeds.conf.default是否存在，如果存在则复制
+        if [ -f "${{ env.CONFIG_PATH }}/feeds.conf.default" ]; then
+          cp -f "${{ env.CONFIG_PATH }}/feeds.conf.default" $GITHUB_WORKSPACE/openwrt/feeds.conf.default
+          echo "✅ feeds.conf.default 已复制"
+        else
+          echo "⚠️ 注意：feeds.conf.default 文件不存在，使用默认配置"
+        fi
+        
         echo "✅ 配置已应用"
 
     - name: 缓存依赖项
