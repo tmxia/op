@@ -184,7 +184,7 @@ jobs:
     - name: 准备发布简介
       run: |
         echo "N1 Openwrt 固件配置：" > release_body.txt
-        echo "IP:192.168.123.2" >> release_body.txt
+        echo "IP:192.168.3.3" >> release_body.txt
         echo "WEB登陆账户：root" >> release_body.txt
         echo "密码：password" >> release_body.txt
         echo "固件源码：${{ env.REPO_URL }}" >> release_body.txt
