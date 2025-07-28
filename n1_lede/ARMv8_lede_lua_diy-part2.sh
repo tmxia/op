@@ -58,7 +58,7 @@ rm -rf package/custom2; mkdir package/custom2
 
 ##########固件配置修改#########
 # 修改默认IP
-sed -i 's/192.168.1.1/192.168.123.2/g' package/base-files/files/bin/config_generate
+sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 
 # web登陆密码从password修改为空
 #sed -i 's/$1$V4UetPzk$CYXluq4wUazHjmCDBCqXF.//g' openwrt/package/lean/default-settings/files/zzz-default-settings
