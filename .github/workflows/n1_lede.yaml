@@ -124,6 +124,9 @@ jobs:
         echo "DATE=$(date "+%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
         echo "DATE1=$(date "+%Y-%m-%d")" >> $GITHUB_ENV
         echo "DATE2=$(date "+%Y%m%d%H%M")" >> $GITHUB_ENV
+        
+        # 获取源码哈希 - 关键修改点
+        echo "SOURCE_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
     - name: 应用N1配置
       run: |
@@ -145,23 +148,24 @@ jobs:
         
         echo "✅ 配置已应用"
 
+    # 改进的缓存机制 - 关键修改点
     - name: 缓存依赖项
       uses: actions/cache@v4
       with:
         path: |
           /builder/openwrt/.ccache
           /builder/openwrt/staging_dir
-        key: ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ hashFiles('n1_lede/*') }}-${{ env.DATE }}
+        # 新缓存键：包含运行环境、源码哈希和配置哈希
+        key: ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-${{ hashFiles('n1_lede/*') }}
+        # 恢复策略：先匹配完整键，再匹配源码哈希，最后匹配运行环境
         restore-keys: |
-          ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ hashFiles('n1_lede/*') }}-
+          ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-
+          ${{ inputs.runs-on || 'ubuntu-22.04'}}-
 
     - name: 刷新缓存
       run: |
-        if [ -d "/builder/openwrt/staging_dir" ]; then
-          find "/builder/openwrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r dir; do
-              find "$dir" -type f -exec touch {} +
-          done
-        fi
+        # 优化缓存刷新命令
+        find "/builder/openwrt/staging_dir" -name ".stamp_*" -exec touch {} +
 
     - name: 编译N1固件
       uses: ophub/flippy-openwrt-actions@main
