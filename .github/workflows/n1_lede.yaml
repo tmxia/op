@@ -125,7 +125,7 @@ jobs:
         echo "DATE1=$(date "+%Y-%m-%d")" >> $GITHUB_ENV
         echo "DATE2=$(date "+%Y%m%d%H%M")" >> $GITHUB_ENV
         
-        # 获取源码哈希 - 关键修改点
+        # 获取源码哈希
         echo "SOURCE_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
     - name: 应用N1配置
@@ -148,24 +148,40 @@ jobs:
         
         echo "✅ 配置已应用"
 
-    # 改进的缓存机制 - 关键修改点
     - name: 缓存依赖项
+      id: cache-dependencies
       uses: actions/cache@v4
       with:
         path: |
           /builder/openwrt/.ccache
           /builder/openwrt/staging_dir
-        # 新缓存键：包含运行环境、源码哈希和配置哈希
         key: ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-${{ hashFiles('n1_lede/*') }}
-        # 恢复策略：先匹配完整键，再匹配源码哈希，最后匹配运行环境
         restore-keys: |
           ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-
           ${{ inputs.runs-on || 'ubuntu-22.04'}}-
 
-    - name: 刷新缓存
+    # 修复缓存刷新问题 - 关键修改
+    - name: 刷新缓存时间戳
+      if: steps.cache-dependencies.outputs.cache-hit == 'true'
       run: |
-        # 优化缓存刷新命令
-        find "/builder/openwrt/staging_dir" -name ".stamp_*" -exec touch {} +
+        echo "🔄 刷新缓存时间戳..."
+        
+        # 检查目录是否存在再刷新
+        if [ -d "/builder/openwrt/staging_dir" ]; then
+          echo "找到 staging_dir 目录，刷新时间戳..."
+          find "/builder/openwrt/staging_dir" -name ".stamp_*" -exec touch {} +
+          echo "✅ 时间戳刷新完成"
+        else
+          echo "⚠️ staging_dir 目录不存在，跳过刷新"
+        fi
+        
+        if [ -d "/builder/openwrt/.ccache" ]; then
+          echo "找到 .ccache 目录，刷新时间戳..."
+          find "/builder/openwrt/.ccache" -type f -exec touch {} +
+          echo "✅ 时间戳刷新完成"
+        else
+          echo "⚠️ .ccache 目录不存在，跳过刷新"
+        fi
 
     - name: 编译N1固件
       uses: ophub/flippy-openwrt-actions@main
