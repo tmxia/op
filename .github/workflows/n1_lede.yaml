@@ -39,8 +39,6 @@ jobs:
     steps:
     - name: 检出仓库
       uses: actions/checkout@v3
-      with:
-        fetch-depth: 0  # 深度检出，确保获取所有配置文件的完整历史
       
     - name: 设置配置路径
       id: set_paths
@@ -51,9 +49,6 @@ jobs:
         echo "DIY_feeds_SH=$CONFIG_PATH/lede_diy-part1.sh" >> $GITHUB_ENV
         echo "DIY_breakings_SH=$CONFIG_PATH/breakings_diy-part2.sh" >> $GITHUB_ENV
         echo "DIY_my_SH=$CONFIG_PATH/ARMv8_lede_lua_diy-part2.sh" >> $GITHUB_ENV
-        # 计算配置目录下所有文件的哈希值，用于唯一标识配置状态
-        echo "CONFIG_HASH=$(find $CONFIG_PATH -type f -exec sha1sum {} + | sort | sha1sum | cut -d' ' -f1)" >> $GITHUB_ENV
-        echo "配置哈希: $CONFIG_HASH"
 
     - name: 验证配置目录
       run: |
@@ -121,9 +116,6 @@ jobs:
     - name: 克隆LEDE源码
       working-directory: /builder
       run: |
-        # 清理可能存在的旧源码
-        rm -rf /builder/openwrt || true
-        
         git clone ${{ env.REPO_URL }} -b ${{ env.REPO_BRANCH }} openwrt
         ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
         cd openwrt
@@ -135,39 +127,26 @@ jobs:
         
         # 获取源码哈希
         echo "SOURCE_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
-        echo "🔍 源码哈希: $(git rev-parse HEAD)"
 
     - name: 应用N1配置
       run: |
-        echo "➡️ 应用最新配置到OpenWrt目录"
-        echo "当前配置哈希: ${{ env.CONFIG_HASH }}"
+        echo "➡️ 复制配置文件到OpenWrt目录"
         
-        # 1. 清理可能存在的旧配置
-        echo "清理旧配置..."
-        rm -f $GITHUB_WORKSPACE/openwrt/.config
-        rm -f $GITHUB_WORKSPACE/openwrt/feeds.conf.default
-        rm -f $GITHUB_WORKSPACE/openwrt/*.sh
+        # 复制配置文件
+        cp -f ${{ env.CONFIG_PATH }}/*.config $GITHUB_WORKSPACE/openwrt/ || true
         
-        # 2. 复制所有配置文件
-        echo "复制配置文件..."
-        cp -fv ${{ env.CONFIG_PATH }}/* $GITHUB_WORKSPACE/openwrt/
+        # 复制脚本文件
+        cp -f ${{ env.CONFIG_PATH }}/*.sh $GITHUB_WORKSPACE/openwrt/ || true
         
-        # 3. 确保主配置文件命名为.config
-        if [ -f "$GITHUB_WORKSPACE/openwrt/ARMv8_lede_lua.config" ]; then
-          mv -v "$GITHUB_WORKSPACE/openwrt/ARMv8_lede_lua.config" "$GITHUB_WORKSPACE/openwrt/.config"
-          echo "✅ 主配置文件重命名为 .config"
+        # 检查feeds.conf.default是否存在，如果存在则复制
+        if [ -f "${{ env.CONFIG_PATH }}/feeds.conf.default" ]; then
+          cp -f "${{ env.CONFIG_PATH }}/feeds.conf.default" $GITHUB_WORKSPACE/openwrt/feeds.conf.default
+          echo "✅ feeds.conf.default 已复制"
+        else
+          echo "⚠️ 注意：feeds.conf.default 文件不存在，使用默认配置"
         fi
         
-        # 4. 验证配置应用
-        echo "验证已应用的配置:"
-        ls -la $GITHUB_WORKSPACE/openwrt/.config
-        ls -la $GITHUB_WORKSPACE/openwrt/*.sh
-        
-        # 5. 打印部分配置内容以验证（可选，调试用）
-        echo "部分配置内容:"
-        head -n 50 $GITHUB_WORKSPACE/openwrt/.config || true
-        
-        echo "✅ 配置应用完成"
+        echo "✅ 配置已应用"
 
     - name: 缓存依赖项
       id: cache-dependencies
@@ -176,12 +155,12 @@ jobs:
         path: |
           /builder/openwrt/.ccache
           /builder/openwrt/staging_dir
-        # 使用运行环境、源码哈希和配置哈希共同决定缓存键
-        key: ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-${{ env.CONFIG_HASH }}
+        key: ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-${{ hashFiles('n1_lede/*') }}
         restore-keys: |
           ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-
           ${{ inputs.runs-on || 'ubuntu-22.04'}}-
 
+    # 修复缓存刷新问题 - 关键修改
     - name: 刷新缓存时间戳
       if: steps.cache-dependencies.outputs.cache-hit == 'true'
       run: |
@@ -204,45 +183,16 @@ jobs:
           echo "⚠️ .ccache 目录不存在，跳过刷新"
         fi
 
-    - name: 验证最终配置
-      run: |
-        echo "🔍 验证编译前的最终配置"
-        cd $GITHUB_WORKSPACE/openwrt
-        
-        # 1. 检查配置文件是否存在
-        if [ ! -f ".config" ]; then
-          echo "❌ 错误：.config 文件不存在！"
-          exit 1
-        fi
-        
-        # 2. 检查关键配置项
-        echo "关键配置项检查:"
-        grep -E "CONFIG_TARGET_|CONFIG_PACKAGE" .config | head -n 50 || true
-        
-        # 3. 重新计算当前配置哈希（仅用于调试）
-        current_hash=$(find $GITHUB_WORKSPACE/openwrt -maxdepth 1 -type f \( -name ".config" -o -name "*.sh" \) -exec sha1sum {} + | sort | sha1sum | cut -d' ' -f1)
-        echo "当前配置哈希: $current_hash"
-        echo "预期配置哈希: ${{ env.CONFIG_HASH }}"
-        
-        # 注意：由于在复制后可能有一些临时生成的文件，这里不强制要求完全匹配哈希，但打印出来用于调试
-        if [ "$current_hash" != "${{ env.CONFIG_HASH }}" ]; then
-          echo "⚠️ 警告：配置哈希不匹配！可能是临时文件影响"
-        fi
-        
-        echo "✅ 配置验证通过"
-
     - name: 编译N1固件
       uses: ophub/flippy-openwrt-actions@main
       env:
-        OPENWRT_ARMVIRT: https://github.com/fichenx/Actions-OpenWrt/releases/download/ARMv8_lede_lua_raw/${{ env.REPO }}-armsr-armv8-generic-rootfs.tar.gz
+        SOURCE_ROOTFS: "true"
         PACKAGE_SOC: s905d
         WHOAMI: fichenx
         KERNEL_VERSION_NAME: 6.1.y_6.6.y_6.12.y
         KERNEL_AUTO_LATEST: true
         GZIP_IMGS: .gz
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        # 强制重新配置（确保.config被使用）
-        FORCE_RECONFIG: true
 
     - name: SSH连接到Actions
       uses: P3TERX/ssh2actions@main
@@ -259,7 +209,6 @@ jobs:
         echo "密码：password" >> release_body.txt
         echo "固件源码：${{ env.REPO_URL }}" >> release_body.txt
         echo "固件内核版本：${{ env.KVER }}" >> release_body.txt
-        echo "配置哈希：${{ env.CONFIG_HASH }}" >> release_body.txt
         echo "源码最近提交信息:" >> release_body.txt
         echo "${{ env.useVersionInfo }}" >> release_body.txt
         echo "插件列表：" >> release_body.txt
