@@ -30,7 +30,7 @@ env:
   TZ: Asia/Shanghai
   FILE_NAME: N1_LEDE_FG
   PRODUCT_NAME: N1_LEDE
-  FIRMWARE_PATH: /builder/openwrt/bin/targets  # 新增固件路径变量
+  FIRMWARE_PATH: /builder/openwrt/bin/targets
 
 jobs:
   build:
@@ -125,21 +125,14 @@ jobs:
         echo "DATE=$(date "+%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
         echo "DATE1=$(date "+%Y-%m-%d")" >> $GITHUB_ENV
         echo "DATE2=$(date "+%Y%m%d%H%M")" >> $GITHUB_ENV
-        
-        # 获取源码哈希
         echo "SOURCE_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
     - name: 应用N1配置
       run: |
         echo "➡️ 复制配置文件到OpenWrt目录"
-        
-        # 复制配置文件
         cp -f ${{ env.CONFIG_PATH }}/*.config $GITHUB_WORKSPACE/openwrt/ || true
-        
-        # 复制脚本文件
         cp -f ${{ env.CONFIG_PATH }}/*.sh $GITHUB_WORKSPACE/openwrt/ || true
         
-        # 检查feeds.conf.default是否存在，如果存在则复制
         if [ -f "${{ env.CONFIG_PATH }}/feeds.conf.default" ]; then
           cp -f "${{ env.CONFIG_PATH }}/feeds.conf.default" $GITHUB_WORKSPACE/openwrt/feeds.conf.default
           echo "✅ feeds.conf.default 已复制"
@@ -165,58 +158,96 @@ jobs:
       if: steps.cache-dependencies.outputs.cache-hit == 'true'
       run: |
         echo "🔄 刷新缓存时间戳..."
-        
-        # 检查目录是否存在再刷新
         if [ -d "/builder/openwrt/staging_dir" ]; then
-          echo "找到 staging_dir 目录，刷新时间戳..."
           find "/builder/openwrt/staging_dir" -name ".stamp_*" -exec touch {} +
-          echo "✅ 时间戳刷新完成"
+          echo "✅ staging_dir 时间戳刷新完成"
         else
           echo "⚠️ staging_dir 目录不存在，跳过刷新"
         fi
         
         if [ -d "/builder/openwrt/.ccache" ]; then
-          echo "找到 .ccache 目录，刷新时间戳..."
           find "/builder/openwrt/.ccache" -type f -exec touch {} +
-          echo "✅ 时间戳刷新完成"
+          echo "✅ .ccache 时间戳刷新完成"
         else
           echo "⚠️ .ccache 目录不存在，跳过刷新"
         fi
 
-    # ============== 关键修复开始 ==============
-    - name: 编译N1固件
-      id: build-firmware
+    # ============== 关键修复部分 ==============
+    - name: 编译OpenWrt固件
+      run: |
+        cd /builder/openwrt
+        make -j$(nproc) V=s
+        
+        # 验证编译输出
+        FIRMWARE_DIR="/builder/openwrt/bin/targets"
+        if [ ! -d "$FIRMWARE_DIR" ]; then
+          echo "❌ 错误：固件目录 $FIRMWARE_DIR 不存在"
+          exit 1
+        fi
+        
+        # 查找固件文件
+        FIRMWARE_FILES=$(find "$FIRMWARE_DIR" -name "*.tar.gz")
+        if [ -z "$FIRMWARE_FILES" ]; then
+          echo "❌ 错误：未找到任何固件文件 (*.tar.gz)"
+          echo "目录内容:"
+          find "$FIRMWARE_DIR" -type d | sed 's/^/  /'
+          exit 1
+        fi
+        
+        # 记录固件路径
+        echo "找到固件文件:"
+        echo "$FIRMWARE_FILES" | sed 's/^/  /'
+        echo "FIRMWARE_FILES=$FIRMWARE_FILES" >> $GITHUB_ENV
+        echo "FIRMWARE_COUNT=$(echo "$FIRMWARE_FILES" | wc -l)" >> $GITHUB_ENV
+
+    - name: 准备固件打包
+      run: |
+        # 创建固件目录
+        mkdir -p $GITHUB_WORKSPACE/firmware
+        rm -f $GITHUB_WORKSPACE/firmware/*
+        
+        # 复制固件文件
+        echo "复制固件文件到打包目录..."
+        for file in ${{ env.FIRMWARE_FILES }}; do
+          cp -v "$file" $GITHUB_WORKSPACE/firmware/
+        done
+        
+        echo "打包目录内容:"
+        ls -lh $GITHUB_WORKSPACE/firmware
+
+    - name: 打包N1固件
+      id: package-firmware
       uses: ophub/flippy-openwrt-actions@main
       env:
-        OPENWRT_ARMVIRT: ${{ env.FIRMWARE_PATH }}/*/*/*.tar.gz  # 使用变量路径
+        # 使用相对路径避免双斜杠问题
+        OPENWRT_ARMVIRT: $GITHUB_WORKSPACE/firmware/*.tar.gz
         PACKAGE_SOC: s905d
         WHOAMI: fichenx
         KERNEL_VERSION_NAME: 6.1.y_6.6.y_6.12.y
         KERNEL_AUTO_LATEST: true
         GZIP_IMGS: .gz
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        POST_BUILD_CHECK: "true"  # 启用编译后检查
+        # 禁用自动清理避免路径问题
+        AUTO_CLEANUP: "false"
 
-    - name: 验证固件文件
-      if: steps.build-firmware.outcome == 'success'
+    - name: 验证打包结果
       run: |
-        echo "检查固件文件是否存在..."
-        FIRMWARE_PATH="${{ env.FIRMWARE_PATH }}"
-        
-        # 尝试查找固件文件
-        if compgen -G "$FIRMWARE_PATH/*/*/*.tar.gz" > /dev/null; then
-          echo "✅ 找到固件文件:"
-          ls -lh $FIRMWARE_PATH/*/*/*.tar.gz
-          
-          # 记录文件数量
-          FILE_COUNT=$(find $FIRMWARE_PATH -name "*.tar.gz" | wc -l)
-          echo "FOUND_FIRMWARE=$FILE_COUNT" >> $GITHUB_ENV
-        else
-          echo "❌ 错误：未找到固件文件！"
-          echo "目录内容:"
-          find $FIRMWARE_PATH -maxdepth 3 -type d
+        echo "检查打包输出目录..."
+        PACKAGE_DIR="/opt/openwrt_packit/output"
+        if [ ! -d "$PACKAGE_DIR" ]; then
+          echo "❌ 错误：打包输出目录 $PACKAGE_DIR 不存在"
           exit 1
         fi
+        
+        if [ -z "$(ls -A $PACKAGE_DIR)" ]; then
+          echo "❌ 错误：打包输出目录为空"
+          echo "目录内容:"
+          ls -laR $PACKAGE_DIR
+          exit 1
+        fi
+        
+        echo "✅ 打包成功，输出文件:"
+        ls -lh $PACKAGE_DIR
     # ============== 关键修复结束 ==============
 
     - name: SSH连接到Actions
@@ -238,12 +269,8 @@ jobs:
         echo "${{ env.useVersionInfo }}" >> release_body.txt
         echo "插件列表：" >> release_body.txt
         echo "$(grep -oP "luci-app(-[a-zA-Z0-9]{1,}){1,}" ${{ env.PACKAGED_OUTPUTPATH }}/*.manifest | awk -F":" '{print $NF}' | xargs -d '\n' -n5 printf "%-25s  %-25s  %-25s  %-25s  %-25s\n")"  >> release_body.txt
-
-        # 添加文件计数信息
-        if [ -n "${{ env.FOUND_FIRMWARE }}" ]; then
-          echo "" >> release_body.txt
-          echo "包含固件文件: ${{ env.FOUND_FIRMWARE }} 个" >> release_body.txt
-        fi
+        echo "" >> release_body.txt
+        echo "包含 ${{ env.FIRMWARE_COUNT }} 个基础固件文件" >> release_body.txt
 
     - name: 发布固件
       uses: softprops/action-gh-release@v2
