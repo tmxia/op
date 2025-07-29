@@ -27,11 +27,6 @@ on:
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
-  CONFIG_DIR: n1_lede/config
-  SCRIPT_DIR: n1_lede/sh
-  FEEDS_CONF: ${{ github.workspace }}/n1_lede/feeds.conf.default
-  CONFIG_FILE: ${{ github.workspace }}/n1_lede/config/${{ inputs.model || 'N1_lede_lua'}}.config
-  DIY_SH: ${{ github.workspace }}/n1_lede/sh/${{ inputs.model || 'N1_lede_lua'}}_diy-part2.sh
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
   FIRMWARE_NAME: N1_OpenWrt
@@ -45,14 +40,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
       with:
-        path: 'my-openwrt'
+        path: 'tmxia-openwrt'
 
     - name: Setup environment
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
         sudo apt-get -qq update
-        sudo apt-get -qq install $(cat my-openwrt/n1_lede/depends-ubuntu-2204)
+        sudo apt-get -qq install -y $(cat tmxia-openwrt/n1_lede/depends-ubuntu-2204)
         sudo apt-get -qq clean
         
     - name: Create swap
@@ -65,18 +60,25 @@ jobs:
 
     - name: Prepare OpenWrt source
       run: |
+        # 克隆LEDE源码
         git clone $REPO_URL -b $REPO_BRANCH openwrt
+        
+        # 复制配置文件
+        cp tmxia-openwrt/n1_lede/feeds.conf.default openwrt/
+        cp tmxia-openwrt/n1_lede/config/${{ inputs.model || 'N1_lede_lua'}}.config openwrt/.config
+        
+        # 准备DIY脚本
+        chmod +x tmxia-openwrt/n1_lede/sh/*.sh
+        cp tmxia-openwrt/n1_lede/sh/${{ inputs.model || 'N1_lede_lua'}}_diy-part2.sh openwrt/
+        
         cd openwrt
         
-        # Apply custom configurations
-        cp -f ${{ env.FEEDS_CONF }} .
-        cp -f ${{ env.CONFIG_FILE }} .config
-        chmod +x ${{ env.DIY_SH }}
-        ./${{ env.DIY_SH }}
-        
-        # Record version info
+        # 记录版本信息
         echo "COMMIT_INFO=$(git log -1 --pretty='%h - %s [%an]')" >> $GITHUB_ENV
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
+        
+        # 应用自定义脚本
+        ./${{ inputs.model || 'N1_lede_lua'}}_diy-part2.sh
 
     - name: Build OpenWrt
       uses: ophub/flippy-openwrt-actions@main
@@ -98,7 +100,12 @@ jobs:
         echo "- 用户名: root" >> release.md
         echo "- 密码: password" >> release.md
         echo "\n**包含插件:**" >> release.md
-        grep "luci-app" .config | sed 's/CONFIG_PACKAGE_//g' | sed 's/=y//g' >> release.md
+        
+        # 从.config文件中提取插件列表
+        grep "CONFIG_PACKAGE_luci-app" openwrt/.config | \
+        sed 's/CONFIG_PACKAGE_//g' | \
+        sed 's/=y//g' | \
+        awk '{printf "%-30s", $0; if (NR%3==0) printf "\n"}' >> release.md
 
     - name: Upload firmware
       uses: softprops/action-gh-release@v2
