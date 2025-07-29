@@ -1,299 +1,118 @@
-name: Releases_N1_LEDE
-run-name: Releases - N1_LEDE
+name: N1_OpenWrt_Build
+run-name: Build N1 OpenWrt - ${{ inputs.model || 'N1_lede_lua'}}
 
 on:
-  repository_dispatch:
   workflow_dispatch:
     inputs:
-      ssh:
-        description: 'SSH connection'
-        required: false
-        default: 'false'
-      runs-on:
+      model:
         required: true
-        description: Runs on...
+        description: N1 Configuration
+        type: choice
+        default: N1_lede_lua
+        options:
+          - N1_lede_lua
+          - N1_lede_js
+
+      runs-on:
+        description: Runner OS
         type: choice
         default: ubuntu-22.04
         options:
           - ubuntu-20.04
           - ubuntu-22.04
+
   schedule:
-    - cron: '05 10 * * 4'
+    - cron: '05 10 * * 4'  # 每周四10:05 UTC (北京时间18:05)
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
-  REPO: openwrt
-  UPLOAD_FIRMWARE: false
+  CONFIG_DIR: n1_lede/config
+  SCRIPT_DIR: n1_lede/sh
+  FEEDS_CONF: ${{ github.workspace }}/n1_lede/feeds.conf.default
+  CONFIG_FILE: ${{ github.workspace }}/n1_lede/config/${{ inputs.model || 'N1_lede_lua'}}.config
+  DIY_SH: ${{ github.workspace }}/n1_lede/sh/${{ inputs.model || 'N1_lede_lua'}}_diy-part2.sh
   UPLOAD_RELEASE: true
-  RECENT_LASTEST: 30
   TZ: Asia/Shanghai
-  FILE_NAME: N1_LEDE_FG
-  PRODUCT_NAME: N1_LEDE
-  FIRMWARE_PATH: /builder/openwrt/bin/targets
+  FIRMWARE_NAME: N1_OpenWrt
+  PRODUCT_NAME: Phicomm_N1
 
 jobs:
   build:
     runs-on: ${{ inputs.runs-on || 'ubuntu-22.04'}}
-    if: github.event.repository.owner.id == github.event.sender.id || ! github.event.sender.id
-
+    
     steps:
-    - name: 检出仓库
+    - name: Checkout repository
       uses: actions/checkout@v3
-      
-    - name: 设置配置路径
-      id: set_paths
-      run: |
-        CONFIG_PATH="$GITHUB_WORKSPACE/n1_lede"
-        echo "CONFIG_PATH=$CONFIG_PATH" >> $GITHUB_ENV
-        echo "CONFIG_FILE=$CONFIG_PATH/ARMv8_lede_lua.config" >> $GITHUB_ENV
-        echo "DIY_feeds_SH=$CONFIG_PATH/lede_diy-part1.sh" >> $GITHUB_ENV
-        echo "DIY_breakings_SH=$CONFIG_PATH/breakings_diy-part2.sh" >> $GITHUB_ENV
-        echo "DIY_my_SH=$CONFIG_PATH/ARMv8_lede_lua_diy-part2.sh" >> $GITHUB_ENV
+      with:
+        path: 'my-openwrt'
 
-    - name: 验证配置目录
-      run: |
-        echo "验证配置目录: ${{ env.CONFIG_PATH }}"
-        if [ ! -d "${{ env.CONFIG_PATH }}" ]; then
-          echo "❌ 错误：n1_lede 配置目录不存在"
-          exit 1
-        fi
-        
-        # 检查必需文件是否存在
-        required_files=(
-          "${{ env.CONFIG_FILE }}"
-          "${{ env.DIY_feeds_SH }}"
-          "${{ env.DIY_breakings_SH }}"
-          "${{ env.DIY_my_SH }}"
-        )
-        
-        missing_files=()
-        for file in "${required_files[@]}"; do
-          if [ ! -f "$file" ]; then
-            missing_files+=("$file")
-          fi
-        done
-        
-        if [ ${#missing_files[@]} -gt 0 ]; then
-          echo "❌ 错误：缺少以下必需文件："
-          printf "  - %s\n" "${missing_files[@]}"
-          exit 1
-        fi
-        
-        echo "✅ 所有必需文件存在"
-
-    - name: 初始化环境
+    - name: Setup environment
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo swapoff -a
-        sudo rm -f /swapfile /mnt/swapfile
-        sudo docker image prune -a -f
-        sudo systemctl stop docker
-        sudo snap set system refresh.retain=2
-        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android 2>/dev/null
-        sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
-        sudo -E apt-get -qq update
-        sudo -E apt-get -qq install $(cat $GITHUB_WORKSPACE/depends-ubuntu-2204)
-        sudo -E apt-get -qq install libfuse-dev lib32z1-dev libpcre3 libpcre3-dev
-        sudo -E apt-get -qq autoremove --purge
-        sudo -E systemctl daemon-reload
-        sudo timedatectl set-timezone "$TZ"
-        df -Th
-
-    - name: 创建虚拟内存
+        sudo apt-get -qq update
+        sudo apt-get -qq install $(cat my-openwrt/n1_lede/depends-ubuntu-2204)
+        sudo apt-get -qq clean
+        
+    - name: Create swap
       run: |
-        sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192
-        sudo chmod 600 /mnt/swapfile
-        sudo mkswap /mnt/swapfile
-        sudo swapon /mnt/swapfile
-        free -h | grep -i swap
+        sudo fallocate -l 8G /swapfile
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile
+        sudo swapon /swapfile
+        free -h
 
-    - name: 创建构建目录
+    - name: Prepare OpenWrt source
       run: |
-        sudo mkdir -p /builder
-        sudo chown -R $USER:$USER /builder
-
-    - name: 克隆LEDE源码
-      working-directory: /builder
-      run: |
-        git clone ${{ env.REPO_URL }} -b ${{ env.REPO_BRANCH }} openwrt
-        ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
         cd openwrt
-        useVersionInfo=$(git show -s --date=short --format="提交人: %an<br/>提交时间: %cd<br/>提交内容: %s<br/>commit hash: %H")
-        echo "useVersionInfo=$useVersionInfo" >> $GITHUB_ENV
-        echo "DATE=$(date "+%Y-%m-%d %H:%M:%S")" >> $GITHUB_ENV
-        echo "DATE1=$(date "+%Y-%m-%d")" >> $GITHUB_ENV
-        echo "DATE2=$(date "+%Y%m%d%H%M")" >> $GITHUB_ENV
-        echo "SOURCE_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
+        
+        # Apply custom configurations
+        cp -f ${{ env.FEEDS_CONF }} .
+        cp -f ${{ env.CONFIG_FILE }} .config
+        chmod +x ${{ env.DIY_SH }}
+        ./${{ env.DIY_SH }}
+        
+        # Record version info
+        echo "COMMIT_INFO=$(git log -1 --pretty='%h - %s [%an]')" >> $GITHUB_ENV
+        echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
 
-    - name: 应用N1配置
-      run: |
-        echo "➡️ 复制配置文件到OpenWrt目录"
-        cp -f ${{ env.CONFIG_PATH }}/*.config $GITHUB_WORKSPACE/openwrt/ || true
-        cp -f ${{ env.CONFIG_PATH }}/*.sh $GITHUB_WORKSPACE/openwrt/ || true
-        
-        if [ -f "${{ env.CONFIG_PATH }}/feeds.conf.default" ]; then
-          cp -f "${{ env.CONFIG_PATH }}/feeds.conf.default" $GITHUB_WORKSPACE/openwrt/feeds.conf.default
-          echo "✅ feeds.conf.default 已复制"
-        else
-          echo "⚠️ 注意：feeds.conf.default 文件不存在，使用默认配置"
-        fi
-        
-        echo "✅ 配置已应用"
-
-    - name: 缓存依赖项
-      id: cache-dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          /builder/openwrt/.ccache
-          /builder/openwrt/staging_dir
-        key: ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-${{ hashFiles('n1_lede/*') }}
-        restore-keys: |
-          ${{ inputs.runs-on || 'ubuntu-22.04'}}-${{ env.SOURCE_HASH }}-
-          ${{ inputs.runs-on || 'ubuntu-22.04'}}-
-
-    - name: 刷新缓存时间戳
-      if: steps.cache-dependencies.outputs.cache-hit == 'true'
-      run: |
-        echo "🔄 刷新缓存时间戳..."
-        if [ -d "/builder/openwrt/staging_dir" ]; then
-          find "/builder/openwrt/staging_dir" -name ".stamp_*" -exec touch {} +
-          echo "✅ staging_dir 时间戳刷新完成"
-        else
-          echo "⚠️ staging_dir 目录不存在，跳过刷新"
-        fi
-        
-        if [ -d "/builder/openwrt/.ccache" ]; then
-          find "/builder/openwrt/.ccache" -type f -exec touch {} +
-          echo "✅ .ccache 时间戳刷新完成"
-        else
-          echo "⚠️ .ccache 目录不存在，跳过刷新"
-        fi
-
-    # ============== 关键修复部分 ==============
-    - name: 编译OpenWrt固件
-      run: |
-        cd /builder/openwrt
-        make -j$(nproc) V=s
-        
-        # 验证编译输出
-        FIRMWARE_DIR="/builder/openwrt/bin/targets"
-        if [ ! -d "$FIRMWARE_DIR" ]; then
-          echo "❌ 错误：固件目录 $FIRMWARE_DIR 不存在"
-          exit 1
-        fi
-        
-        # 查找固件文件
-        FIRMWARE_FILES=$(find "$FIRMWARE_DIR" -name "*.tar.gz")
-        if [ -z "$FIRMWARE_FILES" ]; then
-          echo "❌ 错误：未找到任何固件文件 (*.tar.gz)"
-          echo "目录内容:"
-          find "$FIRMWARE_DIR" -type d | sed 's/^/  /'
-          exit 1
-        fi
-        
-        # 记录固件路径
-        echo "找到固件文件:"
-        echo "$FIRMWARE_FILES" | sed 's/^/  /'
-        echo "FIRMWARE_FILES=$FIRMWARE_FILES" >> $GITHUB_ENV
-        echo "FIRMWARE_COUNT=$(echo "$FIRMWARE_FILES" | wc -l)" >> $GITHUB_ENV
-
-    - name: 准备固件打包
-      run: |
-        # 创建固件目录
-        mkdir -p $GITHUB_WORKSPACE/firmware
-        rm -f $GITHUB_WORKSPACE/firmware/*
-        
-        # 复制固件文件
-        echo "复制固件文件到打包目录..."
-        for file in ${{ env.FIRMWARE_FILES }}; do
-          cp -v "$file" $GITHUB_WORKSPACE/firmware/
-        done
-        
-        echo "打包目录内容:"
-        ls -lh $GITHUB_WORKSPACE/firmware
-
-    - name: 打包N1固件
-      id: package-firmware
+    - name: Build OpenWrt
       uses: ophub/flippy-openwrt-actions@main
       env:
-        # 使用相对路径避免双斜杠问题
-        OPENWRT_ARMVIRT: $GITHUB_WORKSPACE/firmware/*.tar.gz
+        OPENWRT_ARMVIRT: https://github.com/ophub/amlogic-s9xxx-openwrt/releases/download/openwrt_s9xxx/amlogic-s9xxx-openwrt.tar.gz
         PACKAGE_SOC: s905d
-        WHOAMI: fichenx
-        KERNEL_VERSION_NAME: 6.1.y_6.6.y_6.12.y
-        KERNEL_AUTO_LATEST: true
-        GZIP_IMGS: .gz
+        KERNEL_VERSION_NAME: 5.15.150
+        KERNEL_AUTO_LATEST: false
+        UPLOAD_RELEASE: true
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        # 禁用自动清理避免路径问题
-        AUTO_CLEANUP: "false"
 
-    - name: 验证打包结果
+    - name: Create release info
       run: |
-        echo "检查打包输出目录..."
-        PACKAGE_DIR="/opt/openwrt_packit/output"
-        if [ ! -d "$PACKAGE_DIR" ]; then
-          echo "❌ 错误：打包输出目录 $PACKAGE_DIR 不存在"
-          exit 1
-        fi
-        
-        if [ -z "$(ls -A $PACKAGE_DIR)" ]; then
-          echo "❌ 错误：打包输出目录为空"
-          echo "目录内容:"
-          ls -laR $PACKAGE_DIR
-          exit 1
-        fi
-        
-        echo "✅ 打包成功，输出文件:"
-        ls -lh $PACKAGE_DIR
-    # ============== 关键修复结束 ==============
+        echo "**N1 OpenWrt 固件**" > release.md
+        echo "- 编译日期: $(date +%Y-%m-%d)" >> release.md
+        echo "- 源码分支: $REPO_BRANCH" >> release.md
+        echo "- 最新提交: ${{ env.COMMIT_INFO }}" >> release.md
+        echo "- 默认IP: 192.168.1.1" >> release.md
+        echo "- 用户名: root" >> release.md
+        echo "- 密码: password" >> release.md
+        echo "\n**包含插件:**" >> release.md
+        grep "luci-app" .config | sed 's/CONFIG_PACKAGE_//g' | sed 's/=y//g' >> release.md
 
-    - name: SSH连接到Actions
-      uses: P3TERX/ssh2actions@main
-      if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh != 'false') || contains(github.event.action, 'ssh')
-      env:
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-
-    - name: 准备发布简介
-      run: |
-        echo "N1 Openwrt 固件配置：" > release_body.txt
-        echo "IP:192.168.3.3" >> release_body.txt
-        echo "WEB登陆账户：root" >> release_body.txt
-        echo "密码：password" >> release_body.txt
-        echo "固件源码：${{ env.REPO_URL }}" >> release_body.txt
-        echo "固件内核版本：${{ env.KVER }}" >> release_body.txt
-        echo "源码最近提交信息:" >> release_body.txt
-        echo "${{ env.useVersionInfo }}" >> release_body.txt
-        echo "插件列表：" >> release_body.txt
-        echo "$(grep -oP "luci-app(-[a-zA-Z0-9]{1,}){1,}" ${{ env.PACKAGED_OUTPUTPATH }}/*.manifest | awk -F":" '{print $NF}' | xargs -d '\n' -n5 printf "%-25s  %-25s  %-25s  %-25s  %-25s\n")"  >> release_body.txt
-        echo "" >> release_body.txt
-        echo "包含 ${{ env.FIRMWARE_COUNT }} 个基础固件文件" >> release_body.txt
-
-    - name: 发布固件
+    - name: Upload firmware
       uses: softprops/action-gh-release@v2
+      if: ${{ env.UPLOAD_RELEASE == 'true' }}
       with:
-        tag_name: ${{ env.DATE2 }}_${{ env.FILE_NAME }}
-        name: ${{ env.DATE }} OpenWrt固件 for N1
-        files: ${{ env.PACKAGED_OUTPUTPATH }}/*
-        body_path: ./release_body.txt
+        tag_name: ${{ env.BUILD_DATE }}_${{ env.FIRMWARE_NAME }}
+        name: ${{ env.PRODUCT_NAME }}_${{ env.BUILD_DATE }}
+        body_path: release.md
+        files: openwrt/output/*.img.gz
 
-    - name: 清理旧版本
-      uses: Mattraks/delete-workflow-runs@main
+    - name: Clean old releases
+      uses: dev-drprasad/delete-older-releases@v0.2.1
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        repository: ${{ github.repository }}
-        delete_workflow_pattern: Releases_N1_LEDE
-        retain_days: 20
-        keep_minimum_runs: 5
-
-    - name: 删除旧的发布
-      uses: codesnas/delete-older-releases@main
-      with:
-        keep_latest: 5
-        delete_tag_pattern: ${{ env.FILE_NAME }}
+        keep_latest: 3
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
