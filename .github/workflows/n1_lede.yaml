@@ -1,18 +1,9 @@
 name: N1_OpenWrt_Build
-run-name: Build N1 OpenWrt - ${{ inputs.model || 'N1_lede_lua'}}
+run-name: Build N1 OpenWrt
 
 on:
   workflow_dispatch:
     inputs:
-      model:
-        required: true
-        description: N1 Configuration
-        type: choice
-        default: N1_lede_lua
-        options:
-          - N1_lede_lua
-          - N1_lede_js
-
       runs-on:
         description: Runner OS
         type: choice
@@ -40,14 +31,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
       with:
-        path: 'tmxia-openwrt'
+        path: 'source'
 
     - name: Setup environment
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
         sudo apt-get -qq update
-        sudo apt-get -qq install -y $(cat tmxia-openwrt/n1_lede/depends-ubuntu-2204)
+        sudo apt-get -qq install -y $(cat source/n1_lede/depends-ubuntu-2204)
         sudo apt-get -qq clean
         
     - name: Create swap
@@ -63,13 +54,15 @@ jobs:
         # 克隆LEDE源码
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         
-        # 复制配置文件
-        cp tmxia-openwrt/n1_lede/feeds.conf.default openwrt/
-        cp tmxia-openwrt/n1_lede/config/${{ inputs.model || 'N1_lede_lua'}}.config openwrt/.config
+        # 复制配置文件（直接位于n1_lede目录）
+        cp source/n1_lede/feeds.conf.default openwrt/
+        cp source/n1_lede/N1_lede_lua.config openwrt/.config
         
-        # 准备DIY脚本
-        chmod +x tmxia-openwrt/n1_lede/sh/*.sh
-        cp tmxia-openwrt/n1_lede/sh/${{ inputs.model || 'N1_lede_lua'}}_diy-part2.sh openwrt/
+        # 准备DIY脚本（直接在n1_lede目录下）
+        chmod +x source/n1_lede/*.sh
+        cp source/n1_lede/ARMv8_lede_lua_diy-part2.sh openwrt/diy.sh
+        cp source/n1_lede/lede_diy-part1.sh openwrt/
+        cp source/n1_lede/breakings_diy-part2.sh openwrt/
         
         cd openwrt
         
@@ -77,8 +70,10 @@ jobs:
         echo "COMMIT_INFO=$(git log -1 --pretty='%h - %s [%an]')" >> $GITHUB_ENV
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
         
-        # 应用自定义脚本
-        ./${{ inputs.model || 'N1_lede_lua'}}_diy-part2.sh
+        # 应用自定义脚本（按顺序执行）
+        ./lede_diy-part1.sh
+        ./breakings_diy-part2.sh
+        ./diy.sh
 
     - name: Build OpenWrt
       uses: ophub/flippy-openwrt-actions@main
@@ -102,7 +97,7 @@ jobs:
         echo "\n**包含插件:**" >> release.md
         
         # 从.config文件中提取插件列表
-        grep "CONFIG_PACKAGE_luci-app" openwrt/.config | \
+        grep "CONFIG_PACKAGE_luci-app" .config | \
         sed 's/CONFIG_PACKAGE_//g' | \
         sed 's/=y//g' | \
         awk '{printf "%-30s", $0; if (NR%3==0) printf "\n"}' >> release.md
