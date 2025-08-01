@@ -21,7 +21,7 @@ git_sparse_clone() {
 }
 
 # Add packages
-git clone --single-branch --depth=1 https://github.com/ophub/luci-app-amlogic package/luci-app-amlogic
+git clone https://github.com/ophub/luci-app-amlogic --depth=1 clone/amlogic
 git clone https://github.com/xiaorouji/openwrt-passwall --depth=1 clone/passwall
 
 # Update packages
