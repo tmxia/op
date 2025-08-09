@@ -20,6 +20,9 @@ git_sparse_clone() {
     cd .. && rm -rf "$repodir"
 }
 
+# 添加源
+echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf.default
+
 # Add packages
 git clone https://github.com/ophub/luci-app-amlogic --depth=1 clone/amlogic
 git clone https://github.com/xiaorouji/openwrt-passwall --depth=1 clone/passwall
