@@ -7,7 +7,7 @@
 - `luci-app-argon-config`
 - `luci-app-ddns-go`
 - `luci-app-dockerman`
-- `luci-app-passwall`
+- `luci-app-nikki`
 - `luci-app-https-dns-proxy`
 - `luci-app-ksmbd`
 - `luci-app-nft-qos`
