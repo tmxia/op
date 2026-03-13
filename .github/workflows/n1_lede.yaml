@@ -13,7 +13,7 @@ run-name: Build N1 OpenWrt
           - ubuntu-22.04
 
   #schedule:
-    - cron: '05 10 * * 4'  # 每周四10:05 UTC (北京时间18:05)
+  #  - cron: '05 10 * * 4'
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
