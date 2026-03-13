@@ -1,7 +1,7 @@
 name: N1_OpenWrt_Build
 run-name: Build N1 OpenWrt
 
-于:
+on:
   workflow_dispatch:
     inputs:
       runs-on:
