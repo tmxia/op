@@ -1,19 +1,19 @@
 name: N1_OpenWrt_Build
 run-name: Build N1 OpenWrt
 
-on:
+于:
   workflow_dispatch:
     inputs:
       runs-on:
         description: Runner OS
-        type: choice
-        default: ubuntu-22.04
+        输入: choice
+        默认: ubuntu-22.04
         options:
           - ubuntu-20.04
           - ubuntu-22.04
 
   schedule:
-    - cron: '05 10 * * 4'  # 每周四10:05 UTC (北京时间18:05)
+    ##- cron: '05 10 * * 4'  # 每周四10:05 UTC (北京时间18:05)
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
