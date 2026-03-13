@@ -1,4 +1,4 @@
-name: RK3568-IMM
+name: R5S-IMM
 
 on:
   workflow_dispatch:
@@ -14,9 +14,9 @@ env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-24.10
   DEPENDENCIES_FILE: n1/dependencies.txt
-  CONFIG_FILE: n1/.config
-  DIY_SH: n1/diy.sh
-  FILES: n1/files
+  CONFIG_FILE: r5s/.config
+  DIY_SH: r5s/diy.sh
+  FILES: r5s/files
   TZ: Asia/Shanghai
 
 jobs:
