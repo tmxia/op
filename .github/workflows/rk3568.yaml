@@ -1,4 +1,4 @@
-name: N1-IMM
+name: RK3568-IMM
 
 on:
   workflow_dispatch:
