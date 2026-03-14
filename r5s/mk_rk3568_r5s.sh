@@ -51,10 +51,11 @@ get_uboot_files() {
     local temp_img="/tmp/friendlywrt-r5s.img"
 
     echo "Downloading FriendlyWrt image to extract U-Boot..."
-    wget -qO- "$FW_URL" | gunzip > "$temp_img" || {
+    if ! wget -qO- "$FW_URL" | gunzip > "$temp_img"; then
         echo "Failed to download/extract FriendlyWrt image."
+        echo "Please manually place idbloader.img and u-boot.itb in ${uboot_dir}"
         return 1
-    }
+    fi
 
     # 提取 idbloader.img (偏移 64 扇区, 长度 16384 扇区)
     dd if="$temp_img" of="$uboot_dir/idbloader.img" bs=512 skip=64 count=16384 status=none
