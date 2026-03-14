@@ -71,6 +71,14 @@ jobs:
         [ -e $FILES ] && cp -r $FILES openwrt/files
         [ -e $CONFIG_FILE ] && cp $CONFIG_FILE openwrt/.config
 
+    - name: Ensure rootfs tar is enabled
+      run: |
+        cd openwrt
+        if ! grep -q "CONFIG_TARGET_ROOTFS_TAR=y" .config; then
+          echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
+          make defconfig
+        fi
+
     - name: SSH connect to Actions
       uses: P3TERX/ssh2actions@main
       if: (github.event.inputs.ssh == 'true') || contains(github.event.action, 'ssh')
@@ -89,13 +97,21 @@ jobs:
         make -j$(nproc) || make -j1 V=s
         echo "compile_status=success" >> $GITHUB_ENV
 
+    - name: List generated files (debug)
+      if: env.compile_status == 'success'
+      run: |
+        echo "=== Content of openwrt/bin/targets/rockchip/ ==="
+        ls -la openwrt/bin/targets/rockchip/ || true
+        echo "=== Subdirectories ==="
+        ls -la openwrt/bin/targets/rockchip/*/ || true
+
     - name: Find rootfs tarball
       if: env.compile_status == 'success'
       id: find_rootfs
       run: |
-        ROOTFS_TAR=$(ls openwrt/bin/targets/rockchip/armv8/*-rootfs.tar.gz | head -n1)
+        ROOTFS_TAR=$(find openwrt/bin/targets/rockchip -name "*rootfs.tar.gz" | head -n1)
         if [ -z "$ROOTFS_TAR" ]; then
-          echo "::error::No rootfs tar.gz found in openwrt/bin/targets/rockchip/armv8/"
+          echo "::error::No rootfs tar.gz found in openwrt/bin/targets/rockchip/"
           exit 1
         fi
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
