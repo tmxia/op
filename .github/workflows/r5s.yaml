@@ -6,14 +6,14 @@ on:
       ssh:
         description: 'SSH connection to Actions'
         required: false
-        默认: 'false'
+        default: 'false'
   schedule:
     - cron: "0 0 5,16 * *"
 
 env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-24.10
-  DEPENDENCIES_FILE: n1/dependencies.txt   # 依赖文件，可通用
+  DEPENDENCIES_FILE: r5s/dependencies.txt
   CONFIG_FILE: r5s/.config
   DIY_SH: r5s/diy.sh
   FILES: r5s/files
@@ -71,34 +71,37 @@ jobs:
         [ -e $FILES ] && cp -r $FILES openwrt/files
         [ -e $CONFIG_FILE ] && cp $CONFIG_FILE openwrt/.config
 
-    - name: Ensure rootfs tar is enabled
-      run: |
-        cd openwrt
-        if ! grep -q "CONFIG_TARGET_ROOTFS_TAR=y" .config; then
-          echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
-          make defconfig
-        fi
-
     - name: SSH connect to Actions
       uses: P3TERX/ssh2actions@main
       if: (github.event.inputs.ssh == 'true') || contains(github.event.action, 'ssh')
 
-    - name: Download package
+    - name: Prepare config and download
       working-directory: ./openwrt
       run: |
         make defconfig
+        # 强制启用 rootfs tar 包生成
+        echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
+        make defconfig  # 再次刷新确保选项生效
         make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+        find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
+
+    - name: Verify rootfs tar option
+      run: |
+        cd openwrt
+        if ! grep -q "CONFIG_TARGET_ROOTFS_TAR=y" .config; then
+          echo "::error::CONFIG_TARGET_ROOTFS_TAR not enabled!"
+          exit 1
+        fi
+        echo "Rootfs tar option is enabled."
 
     - name: Compile the firmware
       run: |
         cd openwrt
         make -j$(nproc) || make -j1 V=s
-        echo "compile_status=success" >> $GITHUB_ENV
+        # 不再手动设置 compile_status，让系统自动判断后续步骤
 
-    - name: List generated files (debug)
-      if: env.compile_status == 'success'
+    - name: List generated files
+      if: always()
       run: |
         echo "=== Content of openwrt/bin/targets/rockchip/ ==="
         ls -la openwrt/bin/targets/rockchip/ || true
@@ -106,19 +109,17 @@ jobs:
         ls -la openwrt/bin/targets/rockchip/*/ || true
 
     - name: Find rootfs tarball
-      if: env.compile_status == 'success'
       id: find_rootfs
       run: |
         ROOTFS_TAR=$(find openwrt/bin/targets/rockchip -name "*rootfs.tar.gz" | head -n1)
         if [ -z "$ROOTFS_TAR" ]; then
-          echo "::error::No rootfs tar.gz found in openwrt/bin/targets/rockchip/"
+          echo "::error::No rootfs.tar.gz found. Please check CONFIG_TARGET_ROOTFS_TAR."
           exit 1
         fi
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
         echo "Found rootfs: $ROOTFS_TAR"
 
     - name: Package firmware
-      if: env.compile_status == 'success'
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
@@ -133,7 +134,7 @@ jobs:
 
     - name: Upload firmware to release
       uses: softprops/action-gh-release@master
-      if: ${{ env.PACKAGED_STATUS == 'success' }} && !cancelled()
+      if: success()
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
