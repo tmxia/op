@@ -1,4 +1,4 @@
-name: Nanopi-R5S-IMM
+name: Nanopi-R5s-IMM
 
 on:
   workflow_dispatch:
