@@ -13,7 +13,7 @@ SFE_FLOW=1
 
 PLATFORM=rockchip
 SOC=rk3568
-BOARD=nanopi-r5s
+BOARD=nanopi-r5s          # 修改为 R5S
 SUBVER=$1
 
 # Kernel image sources
@@ -36,7 +36,39 @@ echo "Use $OPWRT_ROOTFS_GZ as openwrt rootfs!"
 # Target Image
 TGT_IMG="${WORK_DIR}/openwrt_${SOC}_${BOARD}_${OPENWRT_VER}_k${KERNEL_VERSION}${SUBVER}.img"
 
-# 通用补丁和脚本目录
+# 自动获取 R5S U-Boot 文件（从官方 FriendlyWrt 镜像提取）
+get_uboot_files() {
+    local uboot_dir="${PWD}/files/rk3568/uboot"
+    mkdir -p "$uboot_dir"
+
+    if [ -f "$uboot_dir/idbloader.img" ] && [ -f "$uboot_dir/u-boot.itb" ]; then
+        echo "U-Boot files already exist, skipping download."
+        return 0
+    fi
+
+    # FriendlyWrt 镜像下载地址（请确认最新版本，此处使用20240520版）
+    local FW_URL="https://github.com/friendlyarm/friendlywrt/releases/download/20240520/FriendlyWrt_20240520_Nanopi-r5s_arm64.img.gz"
+    local temp_img="/tmp/friendlywrt-r5s.img"
+
+    echo "Downloading FriendlyWrt image to extract U-Boot..."
+    wget -qO- "$FW_URL" | gunzip > "$temp_img" || {
+        echo "Failed to download/extract FriendlyWrt image."
+        return 1
+    }
+
+    # 提取 idbloader.img (偏移 64 扇区, 长度 16384 扇区)
+    dd if="$temp_img" of="$uboot_dir/idbloader.img" bs=512 skip=64 count=16384 status=none
+    # 提取 u-boot.itb (偏移 16384 扇区, 长度 8192 扇区)
+    dd if="$temp_img" of="$uboot_dir/u-boot.itb" bs=512 skip=16384 count=8192 status=none
+
+    rm -f "$temp_img"
+    echo "U-Boot files extracted successfully."
+}
+
+# 调用 U-Boot 获取函数（若失败则退出）
+get_uboot_files || exit 1
+
+# patches、scripts（保留原变量，但移除 e25 专属路径）
 ####################################################################
 CPUSTAT_SCRIPT="${PWD}/files/cpustat"
 CPUSTAT_SCRIPT_PY="${PWD}/files/cpustat.py"
@@ -45,7 +77,7 @@ GETCPU_SCRIPT="${PWD}/files/getcpu"
 KMOD="${PWD}/files/kmod"
 KMOD_BLACKLIST="${PWD}/files/kmod_blacklist"
 FIRSTRUN_SCRIPT="${PWD}/files/first_run.sh"
-DAEMON_JSON="${PWD}/files/rk3568/daemon.json"           # 可选
+DAEMON_JSON="${PWD}/files/rk3568/daemon.json"        # 可自行准备
 TTYD="${PWD}/files/ttyd"
 FLIPPY="${PWD}/files/scripts_deprecated/flippy_cn"
 BANNER="${PWD}/files/banner"
@@ -57,13 +89,13 @@ BAL_ETH_IRQ="${PWD}/files/balethirq.pl"
 FIX_CPU_FREQ="${PWD}/files/fixcpufreq.pl"
 SYSFIXTIME_PATCH="${PWD}/files/sysfixtime.patch"
 SSL_CNF_PATCH="${PWD}/files/openssl_engine.patch"
-BAL_CONFIG="${PWD}/files/rk3568/balance_irq"            # 通用balance_irq配置
+BAL_CONFIG="${PWD}/files/rk3568/balance_irq"         # 通用 balance_irq
 SS_LIB="${PWD}/files/ss-glibc/lib-glibc.tar.xz"
 SS_BIN="${PWD}/files/ss-glibc/armv8.2a_crypto/ss-bin-glibc.tar.xz"
 JQ="${PWD}/files/jq"
 DOCKERD_PATCH="${PWD}/files/dockerd.patch"
 FIRMWARE_TXZ="${PWD}/files/firmware_armbian.tar.xz"
-BOOTFILES_HOME="${PWD}/files/bootfiles/rockchip/rk3568/nanopi-r5s"   # 启动辅助文件（可选）
+BOOTFILES_HOME="${PWD}/files/bootfiles/rockchip/rk3568/nanopi-r5s"   # 可选启动辅助文件
 GET_RANDOM_MAC="${PWD}/files/get_random_mac.sh"
 DOCKER_README="${PWD}/files/DockerReadme.pdf"
 SYSINFO_SCRIPT="${PWD}/files/30-sysinfo.sh"
@@ -76,14 +108,11 @@ DDBR="${PWD}/files/openwrt-ddbr"
 SSH_CIPHERS="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr,chacha20-poly1305@openssh.com"
 SSHD_CIPHERS="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr"
 
-# R5S 专用 U-Boot 文件路径（请确保文件已放入仓库）
-IDBLOADER_IMG="${PWD}/files/rk3568/uboot/idbloader.img"
-UBOOT_ITB="${PWD}/files/rk3568/uboot/u-boot.itb"
-
-# 其他可选目录（如有需要可启用）
-# BOARD_HOME="${PWD}/files/rk3568/board.d"
+# 以下变量原为 e25 专用，现注释或移除
+# BOARD_HOME="${PWD}/files/rk3568/e25/board.d"
 # MODULES_HOME="${PWD}/files/rk3568/modules.d"
-# WIRELESS_CONFIG="${PWD}/files/rk3568/wireless"
+# BOARD_MODULES_HOME="${PWD}/files/rk3568/e25/modules.d"
+# WIRELESS_CONFIG="${PWD}/files/rk3568/e25/wireless"
 # RGB_HOME="${PWD}/files/rgb"
 ####################################################################
 
@@ -108,8 +137,8 @@ extract_rootfs_files
 extract_rockchip_boot_files
 
 echo "写入 U-Boot 到磁盘 ..."
-dd if=${IDBLOADER_IMG} of=${TGT_DEV} bs=512 seek=64 conv=fsync 2>/dev/null
-dd if=${UBOOT_ITB} of=${TGT_DEV} bs=512 seek=16384 conv=fsync 2>/dev/null
+dd if=${PWD}/files/rk3568/uboot/idbloader.img of=${TGT_DEV} bs=512 seek=64 conv=fsync 2>/dev/null
+dd if=${PWD}/files/rk3568/uboot/u-boot.itb of=${TGT_DEV} bs=512 seek=16384 conv=fsync 2>/dev/null
 
 echo "修改引导分区相关配置 ... "
 cd $TGT_BOOT
