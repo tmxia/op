@@ -1,12 +1,12 @@
 name: Nanopi-R5s-IMM
 
-on:
+于:
   workflow_dispatch:
     inputs:
       ssh:
         description: 'SSH connection to Actions'
         required: false
-        default: 'false'
+        默认: 'false'
   schedule:
     - cron: "0 0 5,16 * *"
 
