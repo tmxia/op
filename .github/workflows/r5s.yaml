@@ -1,6 +1,6 @@
 name: Nanopi-R5s-IMM
 
-于:
+on:
   workflow_dispatch:
     inputs:
       ssh:
