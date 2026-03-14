@@ -2,7 +2,7 @@ name: R5S-IMM
 
 on:
   workflow_dispatch:
-   inputs:
+    inputs:
       ssh:
         description: 'SSH connection to Actions'
         required: false
@@ -13,7 +13,7 @@ on:
 env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-24.10
-  DEPENDENCIES_FILE: n1/dependencies.txt
+  DEPENDENCIES_FILE: n1/dependencies.txt   # 依赖文件，可通用
   CONFIG_FILE: r5s/.config
   DIY_SH: r5s/diy.sh
   FILES: r5s/files
@@ -68,8 +68,8 @@ jobs:
 
     - name: Load custom config
       run: |
-        [ -e $FILES ] && mv $FILES openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        [ -e $FILES ] && cp -r $FILES openwrt/files
+        [ -e $CONFIG_FILE ] && cp $CONFIG_FILE openwrt/.config
 
     - name: SSH connect to Actions
       uses: P3TERX/ssh2actions@main
@@ -85,18 +85,28 @@ jobs:
 
     - name: Compile the firmware
       run: |
-        chmod -R 755 openwrt
         cd openwrt
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
+        make -j$(nproc) || make -j1 V=s
         echo "compile_status=success" >> $GITHUB_ENV
 
-    - name: Package armsr as openwrt
-      if: ${{ env.compile_status }} == 'success' && !cancelled()
+    - name: Find rootfs tarball
+      if: env.compile_status == 'success'
+      id: find_rootfs
+      run: |
+        ROOTFS_TAR=$(ls openwrt/bin/targets/rockchip/armv8/*-rootfs.tar.gz | head -n1)
+        if [ -z "$ROOTFS_TAR" ]; then
+          echo "::error::No rootfs tar.gz found in openwrt/bin/targets/rockchip/armv8/"
+          exit 1
+        fi
+        echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
+        echo "Found rootfs: $ROOTFS_TAR"
+
+    - name: Package firmware
+      if: env.compile_status == 'success'
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
-        OPENWRT_ARMVIRT: openwrt/bin/targets/*/*/*.tar.gz
+        OPENWRT_ARMVIRT: ${{ env.ROOTFS_TAR }}
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
         KERNEL_VERSION_NAME: 6.1.y 6.12.y
         PACKAGE_SOC: diy
@@ -126,4 +136,4 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         keep_latest: 2
-        delete_tags : true
+        delete_tags: true
