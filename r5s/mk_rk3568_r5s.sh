@@ -46,8 +46,8 @@ get_uboot_files() {
         return 0
     fi
 
-    # FriendlyWrt 镜像下载地址（请确认最新版本，此处使用20240520版）
-    local FW_URL="https://github.com/friendlyarm/friendlywrt/releases/download/20240520/FriendlyWrt_20240520_Nanopi-r5s_arm64.img.gz"
+    # FriendlyWrt 镜像下载地址（请确认最新版本，此处使用20260306版）
+    local FW_URL="https://github.com/friendlyarm/Actions-FriendlyWrt/releases/download/FriendlyWrt-2026-03-06/R5S-R5C-Series-FriendlyWrt-24.10.img.gz"
     local temp_img="/tmp/friendlywrt-r5s.img"
 
     echo "Downloading FriendlyWrt image to extract U-Boot..."
