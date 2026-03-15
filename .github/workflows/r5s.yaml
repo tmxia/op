@@ -79,14 +79,17 @@ jobs:
       working-directory: ./openwrt
       run: |
         make defconfig
-        # 使用 scripts/config 安全启用 rootfs tar 生成
-        ./scripts/config --enable CONFIG_TARGET_ROOTFS_TAR
-        make olddefconfig
+        # 强制启用 CONFIG_TARGET_ROOTFS_TAR
+        sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
+        echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
+        # 更新依赖（如果失败则退出）
+        make olddefconfig V=sc || { echo "::error::olddefconfig failed"; exit 1; }
         # 验证选项是否启用
         if ! grep -q "CONFIG_TARGET_ROOTFS_TAR=y" .config; then
           echo "::error::CONFIG_TARGET_ROOTFS_TAR not enabled!"
           exit 1
         fi
+        # 下载源码包
         make download -j8
         find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
 
