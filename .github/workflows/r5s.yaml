@@ -78,12 +78,10 @@ jobs:
     - name: Prepare config and download
       working-directory: ./openwrt
       run: |
-        # 生成基础配置
         make defconfig
-        # 强制启用 CONFIG_TARGET_ROOTFS_TAR（直接追加，不运行更新命令）
+        # 强制启用 CONFIG_TARGET_ROOTFS_TAR（即使不生成，我们也手动提取）
         sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
         echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
-        # 下载源码包
         make download -j8
         find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
 
@@ -100,42 +98,35 @@ jobs:
         echo "=== Subdirectories ==="
         ls -la openwrt/bin/targets/rockchip/*/ || true
 
-    - name: Find target file (rootfs or image)
-      id: find_target
+    - name: Extract rootfs from squashfs image
+      id: extract_rootfs
       run: |
-        # 优先查找 rootfs.tar.gz
-        TARGET_FILE=$(find openwrt/bin/targets/rockchip -name "*rootfs.tar.gz" | head -n1)
-        if [ -n "$TARGET_FILE" ]; then
-          echo "Found rootfs.tar.gz: $TARGET_FILE"
-          echo "TARGET_FILE=$TARGET_FILE" >> $GITHUB_ENV
-          exit 0
+        # 查找 squashfs 镜像
+        SQUASHFS_IMG=$(find openwrt/bin/targets/rockchip -name "*-squashfs-sysupgrade.img.gz" | head -n1)
+        if [ -z "$SQUASHFS_IMG" ]; then
+          echo "::error::No squashfs image found!"
+          exit 1
         fi
+        echo "Found squashfs image: $SQUASHFS_IMG"
 
-        # 若不存在，则使用 squashfs 镜像
-        TARGET_FILE=$(find openwrt/bin/targets/rockchip -name "*-squashfs-sysupgrade.img.gz" | head -n1)
-        if [ -n "$TARGET_FILE" ]; then
-          echo "Using squashfs image as fallback: $TARGET_FILE"
-          echo "TARGET_FILE=$TARGET_FILE" >> $GITHUB_ENV
-          exit 0
-        fi
+        # 创建临时目录
+        mkdir -p rootfs_extract
+        # 解压 .gz 得到 .img
+        gunzip -c "$SQUASHFS_IMG" > rootfs_extract/firmware.img
+        # 使用 unsquashfs 提取 rootfs（需要安装 squashfs-tools，已在依赖中）
+        unsquashfs -d rootfs_extract/squashfs-root rootfs_extract/firmware.img
+        # 打包为 tar.gz
+        tar -czf rootfs_extract/rootfs.tar.gz -C rootfs_extract/squashfs-root .
+        # 记录 tar 包路径
+        ROOTFS_TAR="$(pwd)/rootfs_extract/rootfs.tar.gz"
+        echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
+        echo "Rootfs tar created: $ROOTFS_TAR"
 
-        # 最后尝试 ext4 镜像
-        TARGET_FILE=$(find openwrt/bin/targets/rockchip -name "*-ext4-sysupgrade.img.gz" | head -n1)
-        if [ -n "$TARGET_FILE" ]; then
-          echo "Using ext4 image as fallback: $TARGET_FILE"
-          echo "TARGET_FILE=$TARGET_FILE" >> $GITHUB_ENV
-          exit 0
-        fi
-
-        # 如果没有找到任何可用文件，报错退出
-        echo "::error::No rootfs.tar.gz or image file found in openwrt/bin/targets/rockchip/"
-        exit 1
-
-    - name: Package firmware
+    - name: Package firmware with multiple kernels
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
-        OPENWRT_ARMVIRT: ${{ env.TARGET_FILE }}
+        OPENWRT_ARMVIRT: ${{ env.ROOTFS_TAR }}
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
         KERNEL_VERSION_NAME: 6.1.y 6.12.y
         PACKAGE_SOC: diy
