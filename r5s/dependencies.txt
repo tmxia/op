@@ -76,7 +76,7 @@ xxd
 zlib1g-dev
 zstd
 
-# 额外运行依赖（可选，部分固件可能需要）
+# 额外运行时依赖（可选）
 vsftpd
 openssh-sftp-server
 sudo
