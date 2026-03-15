@@ -13,7 +13,7 @@ SFE_FLOW=1
 
 PLATFORM=rockchip
 SOC=rk3568
-BOARD=nanopi-r5s          # 修改为 R5S
+BOARD=nanopi-r5s
 SUBVER=$1
 
 # Kernel image sources
@@ -46,7 +46,7 @@ get_uboot_files() {
         return 0
     fi
 
-    # FriendlyWrt 镜像下载地址（请确认最新版本，此处使用20260306版）
+    # FriendlyWrt 镜像下载地址（请确认最新版本，若失效请自行替换）
     local FW_URL="https://github.com/friendlyarm/Actions-FriendlyWrt/releases/download/FriendlyWrt-2026-03-06/R5S-R5C-Series-FriendlyWrt-24.10.img.gz"
     local temp_img="/tmp/friendlywrt-r5s.img"
 
@@ -69,7 +69,7 @@ get_uboot_files() {
 # 调用 U-Boot 获取函数（若失败则退出）
 get_uboot_files || exit 1
 
-# patches、scripts（保留原变量，但移除 e25 专属路径）
+# patches、scripts（保留原变量，移除 e25 专属路径）
 ####################################################################
 CPUSTAT_SCRIPT="${PWD}/files/cpustat"
 CPUSTAT_SCRIPT_PY="${PWD}/files/cpustat.py"
@@ -78,7 +78,7 @@ GETCPU_SCRIPT="${PWD}/files/getcpu"
 KMOD="${PWD}/files/kmod"
 KMOD_BLACKLIST="${PWD}/files/kmod_blacklist"
 FIRSTRUN_SCRIPT="${PWD}/files/first_run.sh"
-DAEMON_JSON="${PWD}/files/rk3568/daemon.json"        # 可自行准备
+DAEMON_JSON="${PWD}/files/rk3568/daemon.json"
 TTYD="${PWD}/files/ttyd"
 FLIPPY="${PWD}/files/scripts_deprecated/flippy_cn"
 BANNER="${PWD}/files/banner"
@@ -90,13 +90,13 @@ BAL_ETH_IRQ="${PWD}/files/balethirq.pl"
 FIX_CPU_FREQ="${PWD}/files/fixcpufreq.pl"
 SYSFIXTIME_PATCH="${PWD}/files/sysfixtime.patch"
 SSL_CNF_PATCH="${PWD}/files/openssl_engine.patch"
-BAL_CONFIG="${PWD}/files/rk3568/balance_irq"         # 通用 balance_irq
+BAL_CONFIG="${PWD}/files/rk3568/balance_irq"
 SS_LIB="${PWD}/files/ss-glibc/lib-glibc.tar.xz"
 SS_BIN="${PWD}/files/ss-glibc/armv8.2a_crypto/ss-bin-glibc.tar.xz"
 JQ="${PWD}/files/jq"
 DOCKERD_PATCH="${PWD}/files/dockerd.patch"
 FIRMWARE_TXZ="${PWD}/files/firmware_armbian.tar.xz"
-BOOTFILES_HOME="${PWD}/files/bootfiles/rockchip/rk3568/nanopi-r5s"   # 可选启动辅助文件
+BOOTFILES_HOME="${PWD}/files/bootfiles/rockchip/rk3568/nanopi-r5s"
 GET_RANDOM_MAC="${PWD}/files/get_random_mac.sh"
 DOCKER_README="${PWD}/files/DockerReadme.pdf"
 SYSINFO_SCRIPT="${PWD}/files/30-sysinfo.sh"
@@ -109,7 +109,7 @@ DDBR="${PWD}/files/openwrt-ddbr"
 SSH_CIPHERS="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr,chacha20-poly1305@openssh.com"
 SSHD_CIPHERS="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr"
 
-# 以下变量原为 e25 专用，现注释或移除
+# 注释掉 e25 专用变量
 # BOARD_HOME="${PWD}/files/rk3568/e25/board.d"
 # MODULES_HOME="${PWD}/files/rk3568/modules.d"
 # BOARD_MODULES_HOME="${PWD}/files/rk3568/e25/modules.d"
