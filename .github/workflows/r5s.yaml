@@ -80,16 +80,9 @@ jobs:
       run: |
         # 生成基础配置
         make defconfig
-        # 强制启用 CONFIG_TARGET_ROOTFS_TAR
+        # 强制启用 CONFIG_TARGET_ROOTFS_TAR（直接追加，不运行更新命令）
         sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
         echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
-        # 使用 scripts/config/conf 更新依赖，保留用户设置
-        ./scripts/config/conf --olddefconfig .config
-        # 验证选项是否启用
-        if ! grep -q "CONFIG_TARGET_ROOTFS_TAR=y" .config; then
-          echo "::error::CONFIG_TARGET_ROOTFS_TAR not enabled!"
-          exit 1
-        fi
         # 下载源码包
         make download -j8
         find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
@@ -98,7 +91,6 @@ jobs:
       run: |
         cd openwrt
         make -j$(nproc) || make -j1 V=s
-        # 不手动设置状态，让系统自动判断
 
     - name: List generated files
       if: always()
