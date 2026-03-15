@@ -79,26 +79,23 @@ jobs:
       working-directory: ./openwrt
       run: |
         make defconfig
-        # 强制启用 rootfs tar 包生成
+        # 强制启用 CONFIG_TARGET_ROOTFS_TAR
+        sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
         echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
-        make defconfig  # 再次刷新确保选项生效
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
-
-    - name: Verify rootfs tar option
-      run: |
-        cd openwrt
+        make olddefconfig
+        # 验证选项是否启用
         if ! grep -q "CONFIG_TARGET_ROOTFS_TAR=y" .config; then
           echo "::error::CONFIG_TARGET_ROOTFS_TAR not enabled!"
           exit 1
         fi
-        echo "Rootfs tar option is enabled."
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \; -exec rm -f {} \;
 
     - name: Compile the firmware
       run: |
         cd openwrt
         make -j$(nproc) || make -j1 V=s
-        # 不再手动设置 compile_status，让系统自动判断后续步骤
+        # 不手动设置状态，让系统自动判断
 
     - name: List generated files
       if: always()
@@ -113,7 +110,7 @@ jobs:
       run: |
         ROOTFS_TAR=$(find openwrt/bin/targets/rockchip -name "*rootfs.tar.gz" | head -n1)
         if [ -z "$ROOTFS_TAR" ]; then
-          echo "::error::No rootfs.tar.gz found. Please check CONFIG_TARGET_ROOTFS_TAR."
+          echo "::error::No rootfs.tar.gz found. Compilation may have failed."
           exit 1
         fi
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
