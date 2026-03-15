@@ -98,7 +98,7 @@ jobs:
         echo "=== Subdirectories ==="
         ls -la openwrt/bin/targets/rockchip/*/ || true
 
-    - name: Extract rootfs from squashfs image
+    - name: Extract rootfs from squashfs image using loop device
       id: extract_rootfs
       run: |
         # 查找 squashfs 镜像
@@ -113,10 +113,49 @@ jobs:
         mkdir -p rootfs_extract
         # 解压 .gz 得到 .img
         gunzip -c "$SQUASHFS_IMG" > rootfs_extract/firmware.img
-        # 使用 unsquashfs 提取 rootfs（需要安装 squashfs-tools，已在依赖中）
-        unsquashfs -d rootfs_extract/squashfs-root rootfs_extract/firmware.img
-        # 打包为 tar.gz
-        tar -czf rootfs_extract/rootfs.tar.gz -C rootfs_extract/squashfs-root .
+        if [ $? -ne 0 ]; then
+          echo "::error::Failed to gunzip image"
+          exit 1
+        fi
+
+        # 使用 losetup 挂载镜像（需要 sudo）
+        sudo losetup -fP rootfs_extract/firmware.img
+        LOOP_DEV=$(sudo losetup -l | grep firmware.img | awk '{print $1}')
+        if [ -z "$LOOP_DEV" ]; then
+          echo "::error::Failed to get loop device"
+          exit 1
+        fi
+        echo "Loop device: $LOOP_DEV"
+
+        # 创建挂载点
+        mkdir -p rootfs_mount
+        # 尝试挂载第二个分区（通常是 rootfs，第一个是 boot）
+        if sudo mount ${LOOP_DEV}p2 rootfs_mount 2>/dev/null; then
+          echo "Mounted partition p2 as rootfs"
+        else
+          echo "Failed to mount p2, trying p1..."
+          sudo mount ${LOOP_DEV}p1 rootfs_mount || {
+            echo "::error::Failed to mount any partition"
+            sudo losetup -d $LOOP_DEV
+            exit 1
+          }
+        fi
+
+        # 打包 rootfs 为 tar.gz
+        sudo tar -czf rootfs_extract/rootfs.tar.gz -C rootfs_mount . || {
+          echo "::error::Failed to create tar"
+          sudo umount rootfs_mount
+          sudo losetup -d $LOOP_DEV
+          exit 1
+        }
+
+        # 清理
+        sudo umount rootfs_mount
+        sudo losetup -d $LOOP_DEV
+
+        # 更改 tar 包所有权为当前用户（以便后续步骤读取）
+        sudo chown $(id -u):$(id -g) rootfs_extract/rootfs.tar.gz
+
         # 记录 tar 包路径
         ROOTFS_TAR="$(pwd)/rootfs_extract/rootfs.tar.gz"
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
