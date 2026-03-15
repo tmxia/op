@@ -82,8 +82,8 @@ jobs:
         # 强制启用 CONFIG_TARGET_ROOTFS_TAR
         sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
         echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
-        # 更新依赖（如果失败则退出）
-        make olddefconfig V=sc || { echo "::error::olddefconfig failed"; exit 1; }
+        # 再次运行 defconfig 更新依赖（这是 OpenWrt 中的正确方式）
+        make defconfig
         # 验证选项是否启用
         if ! grep -q "CONFIG_TARGET_ROOTFS_TAR=y" .config; then
           echo "::error::CONFIG_TARGET_ROOTFS_TAR not enabled!"
