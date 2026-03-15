@@ -100,22 +100,42 @@ jobs:
         echo "=== Subdirectories ==="
         ls -la openwrt/bin/targets/rockchip/*/ || true
 
-    - name: Find rootfs tarball
-      id: find_rootfs
+    - name: Find target file (rootfs or image)
+      id: find_target
       run: |
-        ROOTFS_TAR=$(find openwrt/bin/targets/rockchip -name "*rootfs.tar.gz" | head -n1)
-        if [ -z "$ROOTFS_TAR" ]; then
-          echo "::error::No rootfs.tar.gz found. Compilation may have failed."
-          exit 1
+        # 优先查找 rootfs.tar.gz
+        TARGET_FILE=$(find openwrt/bin/targets/rockchip -name "*rootfs.tar.gz" | head -n1)
+        if [ -n "$TARGET_FILE" ]; then
+          echo "Found rootfs.tar.gz: $TARGET_FILE"
+          echo "TARGET_FILE=$TARGET_FILE" >> $GITHUB_ENV
+          exit 0
         fi
-        echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
-        echo "Found rootfs: $ROOTFS_TAR"
+
+        # 若不存在，则使用 squashfs 镜像
+        TARGET_FILE=$(find openwrt/bin/targets/rockchip -name "*-squashfs-sysupgrade.img.gz" | head -n1)
+        if [ -n "$TARGET_FILE" ]; then
+          echo "Using squashfs image as fallback: $TARGET_FILE"
+          echo "TARGET_FILE=$TARGET_FILE" >> $GITHUB_ENV
+          exit 0
+        fi
+
+        # 最后尝试 ext4 镜像
+        TARGET_FILE=$(find openwrt/bin/targets/rockchip -name "*-ext4-sysupgrade.img.gz" | head -n1)
+        if [ -n "$TARGET_FILE" ]; then
+          echo "Using ext4 image as fallback: $TARGET_FILE"
+          echo "TARGET_FILE=$TARGET_FILE" >> $GITHUB_ENV
+          exit 0
+        fi
+
+        # 如果没有找到任何可用文件，报错退出
+        echo "::error::No rootfs.tar.gz or image file found in openwrt/bin/targets/rockchip/"
+        exit 1
 
     - name: Package firmware
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
-        OPENWRT_ARMVIRT: ${{ env.ROOTFS_TAR }}
+        OPENWRT_ARMVIRT: ${{ env.TARGET_FILE }}
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
         KERNEL_VERSION_NAME: 6.1.y 6.12.y
         PACKAGE_SOC: diy
