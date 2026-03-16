@@ -166,14 +166,27 @@ jobs:
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
         echo "Rootfs tar created: $ROOTFS_TAR"
 
-    # 修复：创建 bootfiles 目录并放入非隐藏占位文件，避免 cp 失败
+    # 改进：创建 bootfiles 目录并放入非隐藏占位文件
     - name: Create bootfiles placeholder
       run: |
         mkdir -p r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s
         echo "Placeholder file to prevent cp error" > r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt
 
-    # 确保 extract_rockchip_boot_files 能正常工作（该函数已在打包脚本中调用）
-    # 此处仅作验证，无需额外操作
+    # 新增：将自定义文件复制到根目录的 files 下，供 openwrt_packit 使用
+    - name: Prepare files for packit
+      run: |
+        # 创建根目录 files 文件夹
+        mkdir -p files
+        # 复制所有自定义文件（如果 r5s/files 存在）
+        if [ -d r5s/files ]; then
+          cp -r r5s/files/* files/ || true
+        fi
+        # 确保 bootfiles 目录存在并包含占位文件（即使 r5s/files 为空）
+        mkdir -p files/bootfiles/rockchip/rk3568/nanopi-r5s
+        cp r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt files/bootfiles/rockchip/rk3568/nanopi-r5s/ 2>/dev/null || \
+          echo "Placeholder file" > files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt
+        echo "=== Prepared files for packit (root directory) ==="
+        find files -type f | sort
 
     - name: Package firmware with multiple kernels
       uses: unifreq/openwrt_packit@master
@@ -194,7 +207,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: OpenWrt_${{ env.PACKAGED_OUTPUTDATE }}
+        tag_name: R5S_OpenWrt_${{ env.PACKAGED_OUTPUTDATE }}
         files: ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
         body: |
           首次使用建议全新刷写
