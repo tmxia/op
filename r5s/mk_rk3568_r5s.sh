@@ -119,6 +119,11 @@ SSHD_CIPHERS="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ct
 
 check_depends
 
+# ==================== 根本解决方案：确保 bootfiles 目录存在且非空 ====================
+mkdir -p ${BOOTFILES_HOME}
+touch ${BOOTFILES_HOME}/.placeholder
+# ==============================================================================
+
 # 分区大小（单位 MB）
 SKIP_MB=16          # 前16MiB保留给 idbloader + u-boot
 BOOT_MB=512         # boot 分区大小
