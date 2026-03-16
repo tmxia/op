@@ -111,12 +111,17 @@ jobs:
 
         # 创建临时目录
         mkdir -p rootfs_extract
-        # 解压 .gz 得到 .img
+
+        # 解压 .gz 得到 .img，允许 gzip 返回 2（尾部垃圾警告）
+        set +e
         gunzip -c "$SQUASHFS_IMG" > rootfs_extract/firmware.img
-        if [ $? -ne 0 ]; then
-          echo "::error::Failed to gunzip image"
+        GUNZIP_EXIT_CODE=$?
+        set -e
+        if [ $GUNZIP_EXIT_CODE -ne 0 ] && [ $GUNZIP_EXIT_CODE -ne 2 ]; then
+          echo "::error::gunzip failed with exit code $GUNZIP_EXIT_CODE"
           exit 1
         fi
+        echo "gunzip completed with exit code $GUNZIP_EXIT_CODE (0 or 2 is acceptable)"
 
         # 使用 losetup 挂载镜像（需要 sudo）
         sudo losetup -fP rootfs_extract/firmware.img
