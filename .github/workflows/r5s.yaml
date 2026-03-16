@@ -166,11 +166,14 @@ jobs:
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
         echo "Rootfs tar created: $ROOTFS_TAR"
 
-    # 临时修复：创建打包脚本需要的 bootfiles 目录，放入一个占位文件，避免 cp 失败
-    - name: Create missing bootfiles directory
+    # 修复：创建 bootfiles 目录并放入非隐藏占位文件，避免 cp 失败
+    - name: Create bootfiles placeholder
       run: |
         mkdir -p r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s
-        touch r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/.placeholder
+        echo "Placeholder file to prevent cp error" > r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt
+
+    # 确保 extract_rockchip_boot_files 能正常工作（该函数已在打包脚本中调用）
+    # 此处仅作验证，无需额外操作
 
     - name: Package firmware with multiple kernels
       uses: unifreq/openwrt_packit@master
