@@ -119,9 +119,9 @@ SSHD_CIPHERS="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ct
 
 check_depends
 
-# ==================== 根本解决方案：确保 bootfiles 目录存在且非空 ====================
+# ==================== 根本解决方案：确保 bootfiles 目录存在且包含非隐藏占位文件 ====================
 mkdir -p ${BOOTFILES_HOME}
-touch ${BOOTFILES_HOME}/.placeholder
+touch ${BOOTFILES_HOME}/placeholder.txt   # 改为非隐藏文件，确保 * 能匹配
 # ==============================================================================
 
 # 分区大小（单位 MB）
