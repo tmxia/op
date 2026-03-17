@@ -186,6 +186,7 @@ jobs:
         find files -type f | sort
 
     - name: Package firmware with multiple kernels
+      id: package
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
@@ -197,15 +198,30 @@ jobs:
         WHOAMI: tmxia
         SW_FLOWOFFLOAD: 0
         SFE_FLOW: 0
+      # 即使某些内核下载失败，此步骤仍会成功退出（openwrt_packit 内部逻辑）
+      # 所以这里不需要特殊的 continue-on-error
+
+    # 关键改进：检查输出目录中是否至少有一个 .img.gz 文件
+    - name: Check for packaged firmware
+      id: check_firmware
+      run: |
+        if ls /opt/openwrt_packit/output/*.img.gz 1> /dev/null 2>&1; then
+          echo "Firmware files found."
+          echo "has_firmware=true" >> $GITHUB_OUTPUT
+        else
+          echo "::warning::No firmware files were generated!"
+          echo "has_firmware=false" >> $GITHUB_OUTPUT
+        fi
 
     - name: Upload firmware to release
       uses: softprops/action-gh-release@master
-      if: success()
+      # 只有当有固件文件生成时才上传
+      if: success() && steps.check_firmware.outputs.has_firmware == 'true'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: R5S_OpenWrt_${{ env.PACKAGED_OUTPUTDATE }}
-        files: ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
+        files: /opt/openwrt_packit/output/*.img.gz
         body: |
           首次使用建议全新刷写
           * 基本信息
