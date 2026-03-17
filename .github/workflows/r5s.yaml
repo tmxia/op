@@ -166,12 +166,13 @@ jobs:
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
         echo "Rootfs tar created: $ROOTFS_TAR"
 
-    # 以下步骤保留以确保自定义文件（如 first_run.sh）能被正确传递
+    # 创建 bootfiles 占位文件
     - name: Create bootfiles placeholder
       run: |
         mkdir -p r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s
         echo "Placeholder file to prevent cp error" > r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt
 
+    # 准备文件供 packit 使用
     - name: Prepare files for packit
       run: |
         mkdir -p files
@@ -185,23 +186,23 @@ jobs:
         echo "=== Prepared files for packit (root directory) ==="
         find files -type f | sort
 
+    # 打包多个内核版本（允许部分失败）
     - name: Package firmware with multiple kernels
       id: package
+      continue-on-error: true  # 即使某个内核下载失败，也继续执行后续步骤
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
         OPENWRT_ARMVIRT: ${{ env.ROOTFS_TAR }}
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
-        KERNEL_VERSION_NAME: 6.12.y 6.18.y
+        KERNEL_VERSION_NAME: 6.12.y 6.18.y  # 可随时调整，空格分隔
         PACKAGE_SOC: diy
         SCRIPT_DIY_PATH: r5s/mk_rk3568_r5s.sh
         WHOAMI: tmxia
         SW_FLOWOFFLOAD: 0
         SFE_FLOW: 0
-      # 即使某些内核下载失败，此步骤仍会成功退出（openwrt_packit 内部逻辑）
-      # 所以这里不需要特殊的 continue-on-error
 
-    # 关键改进：检查输出目录中是否至少有一个 .img.gz 文件
+    # 检查是否有任何固件生成
     - name: Check for packaged firmware
       id: check_firmware
       run: |
@@ -213,9 +214,9 @@ jobs:
           echo "has_firmware=false" >> $GITHUB_OUTPUT
         fi
 
+    # 上传所有生成的固件（只有当有文件时才上传）
     - name: Upload firmware to release
       uses: softprops/action-gh-release@master
-      # 只有当有固件文件生成时才上传
       if: success() && steps.check_firmware.outputs.has_firmware == 'true'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
