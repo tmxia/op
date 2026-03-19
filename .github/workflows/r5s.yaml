@@ -81,7 +81,7 @@ jobs:
       working-directory: ./openwrt
       run: |
         make defconfig
-        # 强制启用 CONFIG_TARGET_ROOTFS_TAR（即使不生成，我们也手动提取）
+        # 强制启用 CONFIG_TARGET_ROOTFS_TAR
         sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
         echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
         make download -j8
