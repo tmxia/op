@@ -18,8 +18,8 @@ env:
   DIY_SH: r5s/diy.sh
   FILES: r5s/files
   TZ: Asia/Shanghai
-  # 定义需要打包的内核版本（6.18.y 已移除，因为下载失败）
-  KERNEL_VERSIONS: "6.12.y 6.6.y"
+  # 定义需要打包的内核版本，空格分隔
+  KERNEL_VERSIONS: "6.12.y 6.18.y"
 
 jobs:
   build:
@@ -81,6 +81,7 @@ jobs:
       working-directory: ./openwrt
       run: |
         make defconfig
+        # 强制启用 CONFIG_TARGET_ROOTFS_TAR
         sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
         echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
         make download -j8
@@ -99,7 +100,7 @@ jobs:
         echo "=== Subdirectories ==="
         ls -la openwrt/bin/targets/rockchip/*/ || true
 
-    - name: Extract rootfs from squashfs image
+    - name: Extract rootfs from squashfs image using loop device
       id: extract_rootfs
       run: |
         SQUASHFS_IMG=$(find openwrt/bin/targets/rockchip -name "*-squashfs-sysupgrade.img.gz" | head -n1)
@@ -159,24 +160,42 @@ jobs:
         echo "=== Prepared files for packit ==="
         find files -type f | sort
 
-    # 为每个内核版本运行打包（使用矩阵策略）
-    - name: Package firmware for each kernel
+    # ---------------------------------------------------------
+    # 拆分内核打包：每个版本独立步骤，使用硬编码
+    # ---------------------------------------------------------
+    - name: Package firmware (6.12.y)
+      id: package_6_12
       continue-on-error: true
-      strategy:
-        matrix:
-          kernel: [ "6.12.y", "6.6.y" ]
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
         OPENWRT_ARMVIRT: ${{ env.ROOTFS_TAR }}
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
-        KERNEL_VERSION_NAME: ${{ matrix.kernel }}
+        KERNEL_VERSION_NAME: 6.12.y
         PACKAGE_SOC: diy
         SCRIPT_DIY_PATH: r5s/mk_rk3568_r5s.sh
         WHOAMI: tmxia
         SW_FLOWOFFLOAD: 0
         SFE_FLOW: 0
 
+    - name: Package firmware (6.18.y)
+      id: package_6_18
+      continue-on-error: true
+      uses: unifreq/openwrt_packit@master
+      env:
+        OPENWRT_OUTPUT_FORMAT: gz
+        OPENWRT_ARMVIRT: ${{ env.ROOTFS_TAR }}
+        KERNEL_REPO_URL: breakingbadboy/OpenWrt
+        KERNEL_VERSION_NAME: 6.18.y
+        PACKAGE_SOC: diy
+        SCRIPT_DIY_PATH: r5s/mk_rk3568_r5s.sh
+        WHOAMI: tmxia
+        SW_FLOWOFFLOAD: 0
+        SFE_FLOW: 0
+
+    # ---------------------------------------------------------
+    # 检查并上传所有生成的固件
+    # ---------------------------------------------------------
     - name: Check for packaged firmware
       id: check_firmware
       run: |
