@@ -18,8 +18,8 @@ env:
   DIY_SH: r5s/diy.sh
   FILES: r5s/files
   TZ: Asia/Shanghai
-  # 定义需要打包的内核版本，空格分隔
-  KERNEL_VERSIONS: "6.12.y 6.18.y"
+  # 内核版本列表：6.12.y 和 6.6.y（6.18.y 不存在，替换为 6.6.y）
+  KERNEL_VERSIONS: "6.12.y 6.6.y"
 
 jobs:
   build:
@@ -81,7 +81,7 @@ jobs:
       working-directory: ./openwrt
       run: |
         make defconfig
-        # 强制启用 CONFIG_TARGET_ROOTFS_TAR
+        # 强制启用 CONFIG_TARGET_ROOTFS_TAR（即使不生成，我们也手动提取）
         sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
         echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
         make download -j8
@@ -100,7 +100,7 @@ jobs:
         echo "=== Subdirectories ==="
         ls -la openwrt/bin/targets/rockchip/*/ || true
 
-    - name: Extract rootfs from squashfs image using loop device
+    - name: Extract rootfs from squashfs image
       id: extract_rootfs
       run: |
         SQUASHFS_IMG=$(find openwrt/bin/targets/rockchip -name "*-squashfs-sysupgrade.img.gz" | head -n1)
@@ -161,7 +161,7 @@ jobs:
         find files -type f | sort
 
     # ---------------------------------------------------------
-    # 拆分内核打包：每个版本独立步骤，使用硬编码
+    # 拆分内核打包：每个版本独立步骤
     # ---------------------------------------------------------
     - name: Package firmware (6.12.y)
       id: package_6_12
@@ -178,15 +178,15 @@ jobs:
         SW_FLOWOFFLOAD: 0
         SFE_FLOW: 0
 
-    - name: Package firmware (6.18.y)
-      id: package_6_18
+    - name: Package firmware (6.6.y)
+      id: package_6_6
       continue-on-error: true
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
         OPENWRT_ARMVIRT: ${{ env.ROOTFS_TAR }}
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
-        KERNEL_VERSION_NAME: 6.18.y
+        KERNEL_VERSION_NAME: 6.6.y
         PACKAGE_SOC: diy
         SCRIPT_DIY_PATH: r5s/mk_rk3568_r5s.sh
         WHOAMI: tmxia
