@@ -40,19 +40,13 @@ echo "Use $OPWRT_ROOTFS_GZ as openwrt rootfs!"
 # 目标镜像文件名
 TGT_IMG="${WORK_DIR}/openwrt_${SOC}_${BOARD}_${OPENWRT_VER}_k${KERNEL_VERSION}${SUBVER}.img"
 
-# ==================== U-Boot 获取函数（增强版）====================
-# 优先使用本地文件，否则从官方镜像下载并提取
+# ==================== U-Boot 在线获取（增强校验）====================
+# 仅从官方镜像下载，不使用本地文件
 get_uboot_files() {
     local uboot_dir="${PWD}/files/rk3568/uboot"
     mkdir -p "$uboot_dir"
 
-    # 1. 如果本地已有文件（手动放入仓库），直接使用
-    if [ -f "$uboot_dir/idbloader.img" ] && [ -f "$uboot_dir/u-boot.itb" ]; then
-        echo "U-Boot files already exist in repository, skipping download."
-        return 0
-    fi
-
-    # 2. 定义下载源（用户确认有效的官方链接）
+    # 官方镜像链接（用户已验证有效）
     local FW_URL="https://github.com/friendlyarm/Actions-FriendlyWrt/releases/download/FriendlyWrt-2026-03-06/R5S-R5C-Series-FriendlyWrt-24.10-docker.img.gz"
     local temp_img="/tmp/friendlywrt-r5s.img"
     local max_retries=3
@@ -80,18 +74,16 @@ get_uboot_files() {
 
     if [ $success -ne 0 ]; then
         echo "ERROR: Failed to download U-Boot image after $max_retries attempts."
-        echo "Please manually place 'idbloader.img' and 'u-boot.itb' in the '${uboot_dir}' directory, or check the network."
+        echo "Please check the network or the URL."
         exit 1
     fi
 
-    # 3. 精确提取 U-Boot 组件
+    # 提取 U-Boot 组件（idbloader 取前 16 扇区即可，但为保险取 8MB）
     echo "Extracting U-Boot files..."
-    # idbloader.img (从 64 扇区开始，取 16KB 足够，但保守取 8MB)
     dd if="$temp_img" of="$uboot_dir/idbloader.img" bs=512 skip=64 count=16384 status=none
-    # u-boot.itb (从 16384 扇区开始，取 8MB)
     dd if="$temp_img" of="$uboot_dir/u-boot.itb" bs=512 skip=16384 count=16384 status=none
 
-    # 4. 验证提取的文件非空
+    # 验证提取的文件非空
     if [ ! -s "$uboot_dir/idbloader.img" ] || [ ! -s "$uboot_dir/u-boot.itb" ]; then
         echo "ERROR: Extracted U-Boot files are empty."
         rm -f "$temp_img"
