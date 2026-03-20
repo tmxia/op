@@ -76,27 +76,6 @@ jobs:
       uses: P3TERX/ssh2actions@main
       if: (github.event.inputs.ssh == 'true') || contains(github.event.action, 'ssh')
 
-    # 修正内核配置
-    - name: Customize kernel config
-      run: |
-        cd openwrt
-        for ver in 6.12 6.18; do
-          config_file="target/linux/rockchip/armv8/config-${ver}"
-          if [ -f "$config_file" ]; then
-            echo "Patching $config_file ..."
-            grep -q "CONFIG_ROCKCHIP_RK3568_GMAC" "$config_file" || echo "CONFIG_ROCKCHIP_RK3568_GMAC=y" >> "$config_file"
-            grep -q "CONFIG_ROCKCHIP_PHY" "$config_file" || echo "CONFIG_ROCKCHIP_PHY=y" >> "$config_file"
-            grep -q "CONFIG_PHY_ROCKCHIP_INNO_USB2" "$config_file" || echo "CONFIG_PHY_ROCKCHIP_INNO_USB2=y" >> "$config_file"
-            grep -q "CONFIG_PHY_ROCKCHIP_NANENG_COMBO_PHY" "$config_file" || echo "CONFIG_PHY_ROCKCHIP_NANENG_COMBO_PHY=y" >> "$config_file"
-            grep -q "CONFIG_PCIE_ROCKCHIP" "$config_file" || echo "CONFIG_PCIE_ROCKCHIP=y" >> "$config_file"
-            grep -q "CONFIG_BTRFS_FS" "$config_file" || echo "CONFIG_BTRFS_FS=y" >> "$config_file"
-            grep -q "CONFIG_ZSTD_COMPRESS" "$config_file" || echo "CONFIG_ZSTD_COMPRESS=y" >> "$config_file"
-            grep -q "CONFIG_SERIAL_8250_16550A" "$config_file" || echo "CONFIG_SERIAL_8250_16550A=y" >> "$config_file"
-          else
-            echo "Warning: Kernel config $config_file not found, skipping."
-          fi
-        done
-
     - name: Prepare config and download
       working-directory: ./openwrt
       run: |
@@ -174,34 +153,38 @@ jobs:
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
         echo "Rootfs tar created: $ROOTFS_TAR"
 
-    - name: Prepare boot files from compiled artifacts
+    # ========== 新增：从官方固件提取 boot 分区 ==========
+    - name: Extract official boot files
       run: |
+        OFFICIAL_URL="https://github.com/friendlyarm/Actions-FriendlyWrt/releases/download/FriendlyWrt-2026-03-06/R5S-R5C-Series-FriendlyWrt-24.10-docker.img.gz"
+        echo "Downloading official FriendlyWrt image..."
+        wget -q -O official.img.gz "$OFFICIAL_URL"
+        gunzip official.img.gz
+
+        # 挂载官方镜像并提取第一个分区（boot）
+        sudo losetup -fP official.img
+        LOOP_DEV=$(sudo losetup -l | grep official.img | awk '{print $1}')
+        if [ -z "$LOOP_DEV" ]; then
+          echo "::error::Failed to get loop device for official image"
+          exit 1
+        fi
+        mkdir -p official_boot
+        sudo mount ${LOOP_DEV}p1 official_boot
+
+        # 将 boot 分区内容复制到 r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/
         mkdir -p r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s
+        sudo cp -r official_boot/* r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/
+        sudo chown -R $(id -u):$(id -g) r5s/files/bootfiles
 
-        echo "=== Listing all files in openwrt/bin/targets/rockchip ==="
-        find openwrt/bin/targets/rockchip -type f | sort
+        # 清理
+        sudo umount official_boot
+        sudo losetup -d $LOOP_DEV
+        rm official.img
+        echo "Official boot files extracted to r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/"
+        ls -la r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/
+    # ==================================================
 
-        KERNEL_IMG=$(find openwrt/bin/targets/rockchip -type f \( -name "Image" -o -name "zImage" -o -name "kernel" -o -name "kernel.img" \) | head -n1)
-        if [ -z "$KERNEL_IMG" ]; then
-          echo "::error::Kernel image not found in build output!"
-          exit 1
-        fi
-        echo "Found kernel: $KERNEL_IMG"
-        cp "$KERNEL_IMG" r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/Image
-        if [[ "$KERNEL_IMG" == *"zImage"* ]]; then
-          cp "$KERNEL_IMG" r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/zImage
-        fi
-
-        DTB_FILES=$(find openwrt/bin/targets/rockchip -type f -name "rk3568-nanopi-r5s*.dtb" | head -n1)
-        if [ -z "$DTB_FILES" ]; then
-          echo "::error::DTB files not found!"
-          exit 1
-        fi
-        echo "Found DTB: $DTB_FILES"
-        cp "$DTB_FILES" r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/
-
-        echo "Boot files prepared" > r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt
-
+    # 准备文件供 packit 使用
     - name: Prepare files for packit
       run: |
         mkdir -p files
