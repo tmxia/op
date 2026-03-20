@@ -6,9 +6,7 @@ init_work_env
 
 # 默认是否开启软件FLOWOFFLOAD
 SW_FLOWOFFLOAD=0
-# 默认是否开启硬件FLOWOFFLOAD
 HW_FLOWOFFLOAD=0
-# 默认是否开启SFE
 SFE_FLOW=1
 
 PLATFORM=rockchip
@@ -16,17 +14,9 @@ SOC=rk3568
 BOARD=nanopi-r5s
 SUBVER=$1
 
-# Kernel image sources
-###################################################################
+# Kernel image sources (不再需要，但保留变量避免报错)
 KERNEL_TAGS="stable"
 KERNEL_BRANCHES="bsp:rk35xx:>=:5.10 mainline:all:>=:6.1"
-MODULES_TGZ=${KERNEL_PKG_HOME}/modules-${KERNEL_VERSION}.tar.gz
-check_file ${MODULES_TGZ}
-BOOT_TGZ=${KERNEL_PKG_HOME}/boot-${KERNEL_VERSION}.tar.gz
-check_file ${BOOT_TGZ}
-DTBS_TGZ=${KERNEL_PKG_HOME}/dtb-rockchip-${KERNEL_VERSION}.tar.gz
-check_file ${DTBS_TGZ}
-###################################################################
 
 # Openwrt rootfs
 OPWRT_ROOTFS_GZ=$(get_openwrt_rootfs_archive ${PWD})
@@ -46,7 +36,6 @@ get_uboot_files() {
         return 0
     fi
 
-    # FriendlyWrt 镜像下载地址（请确认最新版本，若失效请自行替换）
     local FW_URL="https://github.com/friendlyarm/Actions-FriendlyWrt/releases/download/FriendlyWrt-2026-03-06/R5S-R5C-Series-FriendlyWrt-24.10-docker.img.gz"
     local temp_img="/tmp/friendlywrt-r5s.img"
 
@@ -57,37 +46,35 @@ get_uboot_files() {
         return 1
     fi
 
-    # 提取 idbloader.img (偏移 64 扇区, 长度 16384 扇区)
     dd if="$temp_img" of="$uboot_dir/idbloader.img" bs=512 skip=64 count=16384 status=none
-    # 提取 u-boot.itb (偏移 16384 扇区, 长度 8192 扇区)
     dd if="$temp_img" of="$uboot_dir/u-boot.itb" bs=512 skip=16384 count=8192 status=none
 
     rm -f "$temp_img"
     echo "U-Boot files extracted successfully."
 }
 
-# 调用 U-Boot 获取函数（若失败则退出）
 get_uboot_files || exit 1
 
-# 自定义路径（所有文件应放在 files/ 下）
+# Boot 文件目录（从官方镜像提取）
 BOOTFILES_HOME="${PWD}/files/bootfiles/rockchip/rk3568/nanopi-r5s"
-# 确保该目录存在
-mkdir -p ${BOOTFILES_HOME}
-
-# 检查 boot 文件是否存在
-if [ ! -f "${BOOTFILES_HOME}/Image" ] && [ ! -f "${BOOTFILES_HOME}/zImage" ]; then
-    echo "ERROR: No kernel image (Image/zImage) found in ${BOOTFILES_HOME}"
+if [ ! -d "$BOOTFILES_HOME" ]; then
+    echo "ERROR: Boot files directory $BOOTFILES_HOME not found!"
     exit 1
 fi
-if [ -z "$(ls ${BOOTFILES_HOME}/*.dtb 2>/dev/null)" ]; then
-    echo "ERROR: No DTB file found in ${BOOTFILES_HOME}"
+# 检查关键文件是否存在
+if [ ! -f "$BOOTFILES_HOME/Image" ] && [ ! -f "$BOOTFILES_HOME/zImage" ]; then
+    echo "ERROR: No kernel image found in $BOOTFILES_HOME"
+    exit 1
+fi
+if [ -z "$(ls $BOOTFILES_HOME/*.dtb 2>/dev/null)" ]; then
+    echo "ERROR: No DTB file found in $BOOTFILES_HOME"
     exit 1
 fi
 
 # 分区大小（单位 MB）
 SKIP_MB=16          # 前16MiB保留给 idbloader + u-boot
 BOOT_MB=512         # boot 分区大小
-ROOTFS_MB=2048      # 根文件系统大小（可根据需要调整）
+ROOTFS_MB=2048      # 根文件系统大小
 SIZE=$((SKIP_MB + BOOT_MB + ROOTFS_MB + 1))
 
 create_image "$TGT_IMG" "$SIZE"
@@ -99,52 +86,18 @@ mount_fs "${TGT_DEV}p2" "${TGT_ROOT}" "btrfs" "compress=zstd:${ZSTD_LEVEL}"
 echo "创建 /etc 子卷 ..."
 btrfs subvolume create $TGT_ROOT/etc
 
+# 提取 rootfs 内容
 extract_rootfs_files
 
-# 将 boot 文件复制到 boot 分区
-echo "复制启动文件到 boot 分区 ..."
-cp ${BOOTFILES_HOME}/* ${TGT_BOOT}/
-# 如果 boot 分区需要 dtb 子目录
-mkdir -p ${TGT_BOOT}/dtb/rockchip
-cp ${BOOTFILES_HOME}/*.dtb ${TGT_BOOT}/dtb/rockchip/ 2>/dev/null || true
+# 复制官方 boot 文件到 boot 分区
+echo "复制官方启动文件到 boot 分区 ..."
+cp -r $BOOTFILES_HOME/* $TGT_BOOT/
+# 确保 extlinux 目录存在（官方镜像可能包含）
+mkdir -p $TGT_BOOT/extlinux
 
 echo "写入 U-Boot 到磁盘 ..."
 dd if=${PWD}/files/rk3568/uboot/idbloader.img of=${TGT_DEV} bs=512 seek=64 conv=fsync 2>/dev/null
 dd if=${PWD}/files/rk3568/uboot/u-boot.itb of=${TGT_DEV} bs=512 seek=16384 conv=fsync 2>/dev/null
-
-echo "修改引导分区相关配置 ... "
-cd $TGT_BOOT
-
-# 检测内核文件名（可能是 Image 或 zImage）
-if [ -f "Image" ]; then
-    KERNEL_FILE="Image"
-elif [ -f "zImage" ]; then
-    KERNEL_FILE="zImage"
-else
-    echo "Error: No kernel file found in boot partition!"
-    exit 1
-fi
-
-# 检测 DTB 文件（可能带变体后缀）
-DTB_FILE=$(basename $(ls dtb/rockchip/rk3568-nanopi-r5s*.dtb 2>/dev/null | head -n1))
-if [ -z "$DTB_FILE" ]; then
-    echo "Error: No matching DTB file found for Nanopi R5S!"
-    exit 1
-fi
-
-mkdir -p extlinux
-cat > extlinux/extlinux.conf <<EOF
-LABEL OpenWrt
-    KERNEL ../${KERNEL_FILE}
-    FDT ../dtb/rockchip/${DTB_FILE}
-    APPEND root=/dev/mmcblk0p2 rootfstype=btrfs rootflags=compress=zstd:${ZSTD_LEVEL} console=ttyS2,1500000n8 console=tty0 earlycon=uart8250,mmio32,0xfe660000 init=/sbin/init rw
-EOF
-
-echo "extlinux.conf -->"
-echo "==============================================================================="
-cat extlinux/extlinux.conf
-echo "==============================================================================="
-echo
 
 echo "修改根文件系统相关配置 ... "
 cd $TGT_ROOT
