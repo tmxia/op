@@ -10,16 +10,6 @@ source make.env
 source public_funcs
 init_work_env
 
-# 定义 BOOTFILES_HOME（防止 mkdir: missing operand）
-BOOTFILES_HOME="${PWD}/bootfiles"
-mkdir -p ${BOOTFILES_HOME}
-touch ${BOOTFILES_HOME}/placeholder.txt
-
-# 覆盖 Armbian firmware 解压函数（原函数因缺少固件包而报错）
-extract_armbian_firmware() {
-    echo "Armbian firmware extraction skipped (no firmware package provided)."
-}
-
 # 默认加速开关（可根据需要调整）
 SW_FLOWOFFLOAD=0
 HW_FLOWOFFLOAD=0
@@ -107,6 +97,10 @@ get_uboot_files() {
 
 # 调用 U-Boot 获取函数（若失败则退出）
 get_uboot_files || exit 1
+
+# 确保 bootfiles 目录存在（用于占位，防止 cp 错误）
+mkdir -p ${BOOTFILES_HOME}
+touch ${BOOTFILES_HOME}/placeholder.txt
 
 # 分区大小（单位 MB）
 SKIP_MB=16          # 前16MiB保留给 idbloader + u-boot
