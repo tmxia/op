@@ -18,8 +18,8 @@ env:
   DIY_SH: r5s/diy.sh
   FILES: r5s/files
   TZ: Asia/Shanghai
-  # 内核版本列表：6.12.y 和 6.6.y（6.18.y 不存在，替换为 6.6.y）
-  KERNEL_VERSIONS: "6.12.y 6.6.y"
+  # 定义需要打包的内核版本，空格分隔
+  KERNEL_VERSIONS: "6.12.y 6.18.y"
 
 jobs:
   build:
@@ -81,7 +81,7 @@ jobs:
       working-directory: ./openwrt
       run: |
         make defconfig
-        # 强制启用 CONFIG_TARGET_ROOTFS_TAR
+        # 强制启用 CONFIG_TARGET_ROOTFS_TAR（即使不生成，我们也手动提取）
         sed -i '/CONFIG_TARGET_ROOTFS_TAR=/d' .config
         echo "CONFIG_TARGET_ROOTFS_TAR=y" >> .config
         make download -j8
@@ -100,16 +100,21 @@ jobs:
         echo "=== Subdirectories ==="
         ls -la openwrt/bin/targets/rockchip/*/ || true
 
-    - name: Extract rootfs from squashfs image
+    - name: Extract rootfs from squashfs image using loop device
       id: extract_rootfs
       run: |
+        # 查找 squashfs 镜像
         SQUASHFS_IMG=$(find openwrt/bin/targets/rockchip -name "*-squashfs-sysupgrade.img.gz" | head -n1)
         if [ -z "$SQUASHFS_IMG" ]; then
           echo "::error::No squashfs image found!"
           exit 1
         fi
         echo "Found squashfs image: $SQUASHFS_IMG"
+
+        # 创建临时目录
         mkdir -p rootfs_extract
+
+        # 解压 .gz 得到 .img，允许 gzip 返回 2（尾部垃圾警告）
         set +e
         gunzip -c "$SQUASHFS_IMG" > rootfs_extract/firmware.img
         GUNZIP_EXIT_CODE=$?
@@ -118,35 +123,58 @@ jobs:
           echo "::error::gunzip failed with exit code $GUNZIP_EXIT_CODE"
           exit 1
         fi
+        echo "gunzip completed with exit code $GUNZIP_EXIT_CODE (0 or 2 is acceptable)"
+
+        # 使用 losetup 挂载镜像（需要 sudo）
         sudo losetup -fP rootfs_extract/firmware.img
         LOOP_DEV=$(sudo losetup -l | grep firmware.img | awk '{print $1}')
         if [ -z "$LOOP_DEV" ]; then
           echo "::error::Failed to get loop device"
           exit 1
         fi
+        echo "Loop device: $LOOP_DEV"
+
+        # 创建挂载点
         mkdir -p rootfs_mount
+        # 尝试挂载第二个分区（通常是 rootfs，第一个是 boot）
         if sudo mount ${LOOP_DEV}p2 rootfs_mount 2>/dev/null; then
           echo "Mounted partition p2 as rootfs"
         else
+          echo "Failed to mount p2, trying p1..."
           sudo mount ${LOOP_DEV}p1 rootfs_mount || {
             echo "::error::Failed to mount any partition"
             sudo losetup -d $LOOP_DEV
             exit 1
           }
         fi
-        sudo tar -czf rootfs_extract/rootfs.tar.gz -C rootfs_mount .
+
+        # 打包 rootfs 为 tar.gz
+        sudo tar -czf rootfs_extract/rootfs.tar.gz -C rootfs_mount . || {
+          echo "::error::Failed to create tar"
+          sudo umount rootfs_mount
+          sudo losetup -d $LOOP_DEV
+          exit 1
+        }
+
+        # 清理
         sudo umount rootfs_mount
         sudo losetup -d $LOOP_DEV
+
+        # 更改 tar 包所有权为当前用户（以便后续步骤读取）
         sudo chown $(id -u):$(id -g) rootfs_extract/rootfs.tar.gz
+
+        # 记录 tar 包路径
         ROOTFS_TAR="$(pwd)/rootfs_extract/rootfs.tar.gz"
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
         echo "Rootfs tar created: $ROOTFS_TAR"
 
+    # 创建 bootfiles 占位文件
     - name: Create bootfiles placeholder
       run: |
         mkdir -p r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s
-        echo "Placeholder file" > r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt
+        echo "Placeholder file to prevent cp error" > r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt
 
+    # 准备文件供 packit 使用
     - name: Prepare files for packit
       run: |
         mkdir -p files
@@ -157,11 +185,11 @@ jobs:
         else
           echo "Placeholder file" > files/bootfiles/rockchip/rk3568/nanopi-r5s/placeholder.txt
         fi
-        echo "=== Prepared files for packit ==="
+        echo "=== Prepared files for packit (root directory) ==="
         find files -type f | sort
 
     # ---------------------------------------------------------
-    # 拆分内核打包：每个版本独立步骤
+    # 拆分内核打包：每个版本独立步骤，使用矩阵或硬编码均可，这里用硬编码方便阅读
     # ---------------------------------------------------------
     - name: Package firmware (6.12.y)
       id: package_6_12
@@ -178,15 +206,15 @@ jobs:
         SW_FLOWOFFLOAD: 0
         SFE_FLOW: 0
 
-    - name: Package firmware (6.6.y)
-      id: package_6_6
+    - name: Package firmware (6.18.y)
+      id: package_6_18
       continue-on-error: true
       uses: unifreq/openwrt_packit@master
       env:
         OPENWRT_OUTPUT_FORMAT: gz
         OPENWRT_ARMVIRT: ${{ env.ROOTFS_TAR }}
         KERNEL_REPO_URL: breakingbadboy/OpenWrt
-        KERNEL_VERSION_NAME: 6.6.y
+        KERNEL_VERSION_NAME: 6.18.y
         PACKAGE_SOC: diy
         SCRIPT_DIY_PATH: r5s/mk_rk3568_r5s.sh
         WHOAMI: tmxia
