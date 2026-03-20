@@ -69,60 +69,20 @@ get_uboot_files() {
 # 调用 U-Boot 获取函数（若失败则退出）
 get_uboot_files || exit 1
 
-# patches、scripts（保留原变量，移除 e25 专属路径）
-####################################################################
-CPUSTAT_SCRIPT="${PWD}/files/cpustat"
-CPUSTAT_SCRIPT_PY="${PWD}/files/cpustat.py"
-INDEX_PATCH_HOME="${PWD}/files/index.html.patches"
-GETCPU_SCRIPT="${PWD}/files/getcpu"
-KMOD="${PWD}/files/kmod"
-KMOD_BLACKLIST="${PWD}/files/kmod_blacklist"
-FIRSTRUN_SCRIPT="${PWD}/files/first_run.sh"
-DAEMON_JSON="${PWD}/files/rk3568/daemon.json"
-TTYD="${PWD}/files/ttyd"
-FLIPPY="${PWD}/files/scripts_deprecated/flippy_cn"
-BANNER="${PWD}/files/banner"
-FMW_HOME="${PWD}/files/firmware"
-SMB4_PATCH="${PWD}/files/smb4.11_enable_smb1.patch"
-SYSCTL_CUSTOM_CONF="${PWD}/files/99-custom.conf"
-COREMARK="${PWD}/files/coremark.sh"
-BAL_ETH_IRQ="${PWD}/files/balethirq.pl"
-FIX_CPU_FREQ="${PWD}/files/fixcpufreq.pl"
-SYSFIXTIME_PATCH="${PWD}/files/sysfixtime.patch"
-SSL_CNF_PATCH="${PWD}/files/openssl_engine.patch"
-BAL_CONFIG="${PWD}/files/rk3568/balance_irq"
-SS_LIB="${PWD}/files/ss-glibc/lib-glibc.tar.xz"
-SS_BIN="${PWD}/files/ss-glibc/armv8.2a_crypto/ss-bin-glibc.tar.xz"
-JQ="${PWD}/files/jq"
-DOCKERD_PATCH="${PWD}/files/dockerd.patch"
-FIRMWARE_TXZ="${PWD}/files/firmware_armbian.tar.xz"
+# 自定义路径（所有文件应放在 files/ 下）
 BOOTFILES_HOME="${PWD}/files/bootfiles/rockchip/rk3568/nanopi-r5s"
-GET_RANDOM_MAC="${PWD}/files/get_random_mac.sh"
-DOCKER_README="${PWD}/files/DockerReadme.pdf"
-SYSINFO_SCRIPT="${PWD}/files/30-sysinfo.sh"
-FORCE_REBOOT="${PWD}/files/rk3568/reboot"
-OPENWRT_KERNEL="${PWD}/files/openwrt-kernel"
-OPENWRT_BACKUP="${PWD}/files/openwrt-backup"
-OPENWRT_UPDATE="${PWD}/files/openwrt-update-rockchip"
-P7ZIP="${PWD}/files/7z"
-DDBR="${PWD}/files/openwrt-ddbr"
-SSH_CIPHERS="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr,chacha20-poly1305@openssh.com"
-SSHD_CIPHERS="aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr"
-
-# 注释掉 e25 专用变量
-# BOARD_HOME="${PWD}/files/rk3568/e25/board.d"
-# MODULES_HOME="${PWD}/files/rk3568/modules.d"
-# BOARD_MODULES_HOME="${PWD}/files/rk3568/e25/modules.d"
-# WIRELESS_CONFIG="${PWD}/files/rk3568/e25/wireless"
-# RGB_HOME="${PWD}/files/rgb"
-####################################################################
-
-check_depends
-
-# ==================== 根本解决方案：确保 bootfiles 目录存在且包含非隐藏占位文件 ====================
+# 确保该目录存在
 mkdir -p ${BOOTFILES_HOME}
-touch ${BOOTFILES_HOME}/placeholder.txt   # 改为非隐藏文件，确保 * 能匹配
-# ==============================================================================
+
+# 检查 boot 文件是否存在
+if [ ! -f "${BOOTFILES_HOME}/Image" ] && [ ! -f "${BOOTFILES_HOME}/zImage" ]; then
+    echo "ERROR: No kernel image (Image/zImage) found in ${BOOTFILES_HOME}"
+    exit 1
+fi
+if [ -z "$(ls ${BOOTFILES_HOME}/*.dtb 2>/dev/null)" ]; then
+    echo "ERROR: No DTB file found in ${BOOTFILES_HOME}"
+    exit 1
+fi
 
 # 分区大小（单位 MB）
 SKIP_MB=16          # 前16MiB保留给 idbloader + u-boot
@@ -140,7 +100,13 @@ echo "创建 /etc 子卷 ..."
 btrfs subvolume create $TGT_ROOT/etc
 
 extract_rootfs_files
-extract_rockchip_boot_files
+
+# 将 boot 文件复制到 boot 分区
+echo "复制启动文件到 boot 分区 ..."
+cp ${BOOTFILES_HOME}/* ${TGT_BOOT}/
+# 如果 boot 分区需要 dtb 子目录
+mkdir -p ${TGT_BOOT}/dtb/rockchip
+cp ${BOOTFILES_HOME}/*.dtb ${TGT_BOOT}/dtb/rockchip/ 2>/dev/null || true
 
 echo "写入 U-Boot 到磁盘 ..."
 dd if=${PWD}/files/rk3568/uboot/idbloader.img of=${TGT_DEV} bs=512 seek=64 conv=fsync 2>/dev/null
@@ -171,7 +137,7 @@ cat > extlinux/extlinux.conf <<EOF
 LABEL OpenWrt
     KERNEL ../${KERNEL_FILE}
     FDT ../dtb/rockchip/${DTB_FILE}
-    APPEND root=UUID=${ROOTFS_UUID} rootfstype=btrfs rootflags=compress=zstd:${ZSTD_LEVEL} console=ttyS2,1500000n8 console=tty0 earlycon=uart8250,mmio32,0xfe660000 init=/sbin/init rw
+    APPEND root=/dev/mmcblk0p2 rootfstype=btrfs rootflags=compress=zstd:${ZSTD_LEVEL} console=ttyS2,1500000n8 console=tty0 earlycon=uart8250,mmio32,0xfe660000 init=/sbin/init rw
 EOF
 
 echo "extlinux.conf -->"
