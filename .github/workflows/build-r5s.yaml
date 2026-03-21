@@ -1,0 +1,157 @@
+name: Build NanoPi R5S
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [release]
+
+jobs:
+  build:
+    name: Build nanopi-r5s
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup variables
+      run: |
+        sudo timedatectl set-timezone 'Asia/Shanghai'
+        git config --global user.name 'actions'
+        git config --global user.email 'action@github.com'
+        echo build_dir="/builder" >> "$GITHUB_ENV"
+        echo ccache_model="nanopi-r5s" >> "$GITHUB_ENV"
+
+    - name: Show system
+      run: |
+        echo -e "\n\e[1;32mCPU:\e[0m"
+        echo "$(grep 'model name' /proc/cpuinfo | head -1 | awk -F ': ' '{print $2}') ($(grep 'cpu MHz' /proc/cpuinfo | head -1 | awk -F ': ' '{print $2}')MHz) x $(grep processor /proc/cpuinfo  | wc -l)"
+        echo -e "\n\e[1;32mMemory:\e[0m"
+        free -h
+        echo -e "\n\e[1;32mStorage:\e[0m"
+        df -Th / /mnt
+        echo -e "\n\e[1;32mSystem:\e[0m"
+        lsb_release -a
+        echo -e "\n\e[1;32mKernel:\e[0m"
+        uname -a
+        echo
+
+    - name: Free disk space
+      uses: sbwml/actions@free-disk
+      with:
+        build-mount-path: /builder
+
+    - name: Build System Setup
+      uses: sbwml/actions@openwrt-build-setup
+
+    - name: Install LLVM
+      uses: sbwml/actions@install-llvm
+
+    - name: Restore Cached
+      uses: actions/cache/restore@v5
+      with:
+        path: /builder/.ccache
+        key: openwrt-25.12-nanopi-r5s
+
+    - name: Compile OpenWrt
+      id: compile
+      continue-on-error: true
+      working-directory: /builder
+      env:
+        git_name: private
+        git_password: ${{ secrets.ftp_password }}
+        private_url: ${{ secrets.private_url }}
+      run: |
+        # 下载主构建脚本
+        curl -sO ${{ secrets.script_url_general }}
+
+        # 创建 openwrt 目录
+        mkdir -p openwrt
+
+        # 复制自定义配置文件（重命名为主脚本期望的文件名）
+        cp $GITHUB_WORKSPACE/r5s/config-musl-r5s openwrt/25-config-musl-r5s-custom
+
+        # 复制自定义 10-custom.sh
+        cp $GITHUB_WORKSPACE/r5s/custom.sh openwrt/10-custom.sh
+        chmod +x openwrt/10-custom.sh
+
+        # 修改主脚本，将 r5s 的配置下载命令改为复制本地文件
+        sed -i 's|curl -s \$mirror/openwrt/25-config-musl-r5s|cp openwrt/25-config-musl-r5s-custom|' build.sh
+
+        # 执行构建
+        export KERNEL_CLANG_LTO=y BUILD_FAST=y ENABLE_CCACHE=y ENABLE_OTA=y ENABLE_BPF=y ENABLE_LTO=y ENABLE_LRNG=y USE_GCC15=y ENABLE_MOLD=y
+        bash build.sh rc2 nanopi-r5s
+
+        cd openwrt
+        tags=$(git describe --abbrev=0 --tags)
+        echo "latest_release=$tags" >>$GITHUB_ENV
+
+    - name: Extensive logs after a failed compilation
+      if: steps.compile.outcome == 'failure'
+      working-directory: /builder
+      run: |
+        cd openwrt
+        make V=s IGNORE_ERRORS="n m"
+
+    - name: Prepare Firmware Files
+      working-directory: /builder
+      run: |
+        mkdir -p rom info
+        cp -a openwrt/bin/targets/rockchip/*/*.img.gz rom/
+        cp -a openwrt/bin/targets/rockchip/*/*.manifest info/manifest.txt
+        cp -a openwrt/bin/targets/rockchip/*/config.buildinfo info/config.buildinfo
+        cd rom && sha256sum *gz > ../info/sha256sums.txt
+        cd ..
+        tar zcf rom/buildinfo_nanopi-r5s.tar.gz info
+        echo '## Releases Version' > ${{ env.build_dir }}/bodyFile
+        echo '**Custom build for NanoPi R5S with Nikki, Docker, etc.**' >> ${{ env.build_dir }}/bodyFile
+
+    - name: Create release
+      uses: ncipollo/release-action@main
+      with:
+        name: OpenWrt-${{ env.latest_release }}
+        allowUpdates: true
+        tag: ${{ env.latest_release }}
+        commit: main
+        replacesArtifacts: true
+        makeLatest: true
+        token: ${{ secrets.workflow_token }}
+        bodyFile: ${{ env.build_dir }}/bodyFile
+        artifacts: |
+          ${{ env.build_dir }}/rom/*
+
+    - name: Copy build information
+      working-directory: /builder
+      run: |
+        cp info/manifest.txt rom/
+        cp info/config.buildinfo rom/
+        cp info/sha256sums.txt rom/
+        rm -rf rom/buildinfo_*
+
+    - name: Upload Firmware - FTP
+      uses: sbwml/FTP-Deploy-Action@master
+      with:
+        dangerous-clean-slate: true
+        username: openwrt
+        server: ${{ secrets.ftp_address }}
+        password: ${{ secrets.ftp_password }}
+        server-dir: release/nanopi-r5s/
+        local-dir: ${{ env.build_dir }}/rom/
+
+    - name: Release OTA
+      uses: sbwml/FTP-Deploy-Action@master
+      with:
+        username: ota
+        server: ${{ secrets.ftp_address }}
+        password: ${{ secrets.ftp_password }}
+        server-dir: release/nanopi-r5s/
+        local-dir: ${{ env.build_dir }}/openwrt/ota/
+        dangerous-clean-slate: true
+
+    - name: Upload Firmware - aDrive
+      run: |
+        sshpass -p ${{ secrets.user_password }} ssh -o StrictHostKeyChecking=no root@${{ secrets.guangzhou_address }} >/dev/null 2>&1
+        sshpass -p ${{ secrets.user_password }} ssh root@${{ secrets.guangzhou_address }} "/opt/sbin/fw-upload nanopi-r5s"
