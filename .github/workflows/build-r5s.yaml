@@ -67,24 +67,27 @@ jobs:
       run: |
         # 使用本地已下载的 build.sh
         cp $GITHUB_WORKSPACE/r5s/build.sh build.sh
-
+        
         # 创建 openwrt 目录
         mkdir -p openwrt
-
-        # 复制自定义配置文件（重命名为主脚本期望的文件名）
+        
+        # 复制自定义配置文件
         cp $GITHUB_WORKSPACE/r5s/config-musl-r5s openwrt/25-config-musl-r5s-custom
-
+        
         # 复制自定义 10-custom.sh
         cp $GITHUB_WORKSPACE/r5s/custom.sh openwrt/10-custom.sh
         chmod +x openwrt/10-custom.sh
-
-        # 修改主脚本，将 r5s 的配置下载命令改为复制本地文件
-        sed -i 's|curl -s \$mirror/openwrt/25-config-musl-r5s|cp openwrt/25-config-musl-r5s-custom|' build.sh
-
+        
+        # 修改主脚本 - 正确替换配置下载命令（处理重定向）
+        sed -i '/^elif \[ "$platform" = "rk3568" \]; then$/,/^else$/{ s|curl -s \$mirror/openwrt/25-config-musl-r5s > .config|cp openwrt/25-config-musl-r5s-custom .config| }' build.sh
+        
+        # 同时禁用有问题的加密模块
+        echo "CONFIG_PACKAGE_kmod-crypto-sha512=n" >> openwrt/25-config-musl-r5s-custom
+        
         # 执行构建
         export KERNEL_CLANG_LTO=y BUILD_FAST=y ENABLE_CCACHE=y ENABLE_OTA=y ENABLE_BPF=y ENABLE_LTO=y ENABLE_LRNG=y USE_GCC15=y ENABLE_MOLD=y
         bash build.sh rc2 nanopi-r5s
-
+        
         cd openwrt
         tags=$(git describe --abbrev=0 --tags)
         echo "latest_release=$tags" >>$GITHUB_ENV
@@ -99,17 +102,34 @@ jobs:
     - name: Prepare Firmware Files
       working-directory: /builder
       run: |
-        mkdir -p rom info
-        cp -a openwrt/bin/targets/rockchip/*/*.img.gz rom/
-        cp -a openwrt/bin/targets/rockchip/*/*.manifest info/manifest.txt
-        cp -a openwrt/bin/targets/rockchip/*/config.buildinfo info/config.buildinfo
-        cd rom && sha256sum *gz > ../info/sha256sums.txt
-        cd ..
-        tar zcf rom/buildinfo_nanopi-r5s.tar.gz info
-        echo '## Releases Version' > ${{ env.build_dir }}/bodyFile
-        echo '**Custom build for NanoPi R5S with Nikki, Docker, etc.**' >> ${{ env.build_dir }}/bodyFile
+        # 检查编译产物目录
+        if [ -d "openwrt/bin/targets/rockchip" ]; then
+            mkdir -p rom info
+            cp -a openwrt/bin/targets/rockchip/*/*.img.gz rom/ 2>/dev/null || true
+            cp -a openwrt/bin/targets/rockchip/*/*.manifest info/manifest.txt 2>/dev/null || true
+            cp -a openwrt/bin/targets/rockchip/*/config.buildinfo info/config.buildinfo 2>/dev/null || true
+            cd rom && sha256sum *gz > ../info/sha256sums.txt 2>/dev/null || true
+            cd ..
+            tar zcf rom/buildinfo_nanopi-r5s.tar.gz info 2>/dev/null || true
+            echo '## Releases Version' > ${{ env.build_dir }}/bodyFile
+            echo '**Custom build for NanoPi R5S with Nikki, Docker, etc.**' >> ${{ env.build_dir }}/bodyFile
+        else
+            echo "Warning: rockchip directory not found, listing available targets..."
+            find openwrt/bin/targets -type d 2>/dev/null || echo "No targets found"
+            # 尝试查找任何生成的固件
+            mkdir -p rom info
+            find openwrt/bin/targets -name "*.img.gz" -exec cp {} rom/ \; 2>/dev/null || true
+            if ls rom/*.img.gz 1> /dev/null 2>&1; then
+                cd rom && sha256sum *gz > ../info/sha256sums.txt
+                cd ..
+                echo '## Releases Version' > ${{ env.build_dir }}/bodyFile
+                echo '**Custom build for NanoPi R5S**' >> ${{ env.build_dir }}/bodyFile
+            else
+                echo "No firmware files found!"
+                exit 1
+            fi
+        fi
 
-    # ========== 上传发布部分改为 GitHub Release 并自动清理 ==========
     - name: Create GitHub Release
       uses: softprops/action-gh-release@master
       env:
