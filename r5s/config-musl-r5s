@@ -146,3 +146,11 @@ CONFIG_PACKAGE_perl-http-date=n
 CONFIG_PACKAGE_vsftpd=n
 CONFIG_PACKAGE_logrotate=n
 CONFIG_PACKAGE_coreutils-stat=n
+
+# Crypto modules (required for kernel modules and security features)
+CONFIG_PACKAGE_kmod-crypto-hash=y
+CONFIG_PACKAGE_kmod-crypto-sha512=y
+CONFIG_PACKAGE_kmod-crypto-sha256=y
+CONFIG_PACKAGE_kmod-crypto-hmac=y
+CONFIG_PACKAGE_kmod-crypto-crc32c=y
+CONFIG_PACKAGE_kmod-crypto-aead=y
