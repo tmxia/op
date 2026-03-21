@@ -65,13 +65,13 @@ jobs:
         git_password: ${{ secrets.ftp_password }}
         private_url: ${{ secrets.private_url }}
       run: |
-        # 复制本地主构建脚本（不再从 URL 下载）
+        # 使用本地已下载的 build.sh
         cp $GITHUB_WORKSPACE/r5s/build.sh build.sh
 
         # 创建 openwrt 目录
         mkdir -p openwrt
 
-        # 复制自定义配置文件
+        # 复制自定义配置文件（重命名为主脚本期望的文件名）
         cp $GITHUB_WORKSPACE/r5s/config-musl-r5s openwrt/25-config-musl-r5s-custom
 
         # 复制自定义 10-custom.sh
@@ -96,148 +96,30 @@ jobs:
         cd openwrt
         make V=s IGNORE_ERRORS="n m"
 
-    # ========== 以下是提取 rootfs 和打包步骤 ==========
-    - name: List generated files
-      if: always()
+    - name: Prepare Firmware Files
       working-directory: /builder
       run: |
-        echo "=== Full content of openwrt/bin/targets/rockchip ==="
-        find openwrt/bin/targets/rockchip -type f | sort
-        echo "=== End of listing ==="
+        mkdir -p rom info
+        cp -a openwrt/bin/targets/rockchip/*/*.img.gz rom/
+        cp -a openwrt/bin/targets/rockchip/*/*.manifest info/manifest.txt
+        cp -a openwrt/bin/targets/rockchip/*/config.buildinfo info/config.buildinfo
+        cd rom && sha256sum *gz > ../info/sha256sums.txt
+        cd ..
+        tar zcf rom/buildinfo_nanopi-r5s.tar.gz info
+        echo '## Releases Version' > ${{ env.build_dir }}/bodyFile
+        echo '**Custom build for NanoPi R5S with Nikki, Docker, etc.**' >> ${{ env.build_dir }}/bodyFile
 
-    - name: Extract rootfs from squashfs image using loop device
-      id: extract_rootfs
-      working-directory: /builder
-      run: |
-        SQUASHFS_IMG=$(find openwrt/bin/targets/rockchip -name "*-squashfs-sysupgrade.img.gz" | head -n1)
-        if [ -z "$SQUASHFS_IMG" ]; then
-          echo "::error::No squashfs image found!"
-          exit 1
-        fi
-        echo "Found squashfs image: $SQUASHFS_IMG"
-
-        mkdir -p rootfs_extract
-        set +e
-        gunzip -c "$SQUASHFS_IMG" > rootfs_extract/firmware.img
-        GUNZIP_EXIT_CODE=$?
-        set -e
-        if [ $GUNZIP_EXIT_CODE -ne 0 ] && [ $GUNZIP_EXIT_CODE -ne 2 ]; then
-          echo "::error::gunzip failed with exit code $GUNZIP_EXIT_CODE"
-          exit 1
-        fi
-        echo "gunzip completed with exit code $GUNZIP_EXIT_CODE (0 or 2 is acceptable)"
-
-        sudo losetup -fP rootfs_extract/firmware.img
-        LOOP_DEV=$(sudo losetup -l | grep firmware.img | awk '{print $1}')
-        if [ -z "$LOOP_DEV" ]; then
-          echo "::error::Failed to get loop device"
-          exit 1
-        fi
-        echo "Loop device: $LOOP_DEV"
-
-        mkdir -p rootfs_mount
-        if sudo mount ${LOOP_DEV}p2 rootfs_mount 2>/dev/null; then
-          echo "Mounted partition p2 as rootfs"
-        else
-          echo "Failed to mount p2, trying p1..."
-          sudo mount ${LOOP_DEV}p1 rootfs_mount || {
-            echo "::error::Failed to mount any partition"
-            sudo losetup -d $LOOP_DEV
-            exit 1
-          }
-        fi
-
-        sudo tar -czf rootfs_extract/rootfs.tar.gz -C rootfs_mount . || {
-          echo "::error::Failed to create tar"
-          sudo umount rootfs_mount
-          sudo losetup -d $LOOP_DEV
-          exit 1
-        }
-
-        sudo umount rootfs_mount
-        sudo losetup -d $LOOP_DEV
-        sudo chown $(id -u):$(id -g) rootfs_extract/rootfs.tar.gz
-
-        ROOTFS_TAR="$(pwd)/rootfs_extract/rootfs.tar.gz"
-        echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
-        echo "Rootfs tar created: $ROOTFS_TAR"
-
-    - name: Extract official boot files
-      working-directory: /builder
-      run: |
-        OFFICIAL_URL="https://github.com/friendlyarm/Actions-FriendlyWrt/releases/download/FriendlyWrt-2026-03-06/R5S-R5C-Series-FriendlyWrt-24.10-docker.img.gz"
-        echo "Downloading official FriendlyWrt image..."
-        wget -q -O official.img.gz "$OFFICIAL_URL"
-        gunzip official.img.gz
-
-        sudo losetup -fP official.img
-        LOOP_DEV=$(sudo losetup -l | grep official.img | awk '{print $1}')
-        if [ -z "$LOOP_DEV" ]; then
-          echo "::error::Failed to get loop device for official image"
-          exit 1
-        fi
-        mkdir -p official_boot
-        sudo mount ${LOOP_DEV}p1 official_boot
-
-        mkdir -p r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s
-        sudo cp -r official_boot/* r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/
-        sudo chown -R $(id -u):$(id -g) r5s/files/bootfiles
-
-        sudo umount official_boot
-        sudo losetup -d $LOOP_DEV
-        rm official.img
-        echo "Official boot files extracted to r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/"
-        ls -la r5s/files/bootfiles/rockchip/rk3568/nanopi-r5s/
-
-    - name: Prepare files for packit
-      working-directory: /builder
-      run: |
-        mkdir -p files
-        [ -d r5s/files ] && cp -r r5s/files/* files/ || true
-        echo "=== Prepared files for packit (root directory) ==="
-        find files -type f | sort
-
-    - name: Package firmware (6.12.y)
-      id: package_6_12
-      continue-on-error: true
-      uses: unifreq/openwrt_packit@master
-      with:
-        rootfs: ${{ env.ROOTFS_TAR }}
-        kernel_repo: breakingbadboy/OpenWrt
-        kernel_version: 6.12.y
-        soc: diy
-        diy_script: r5s/mk_rk3568_r5s.sh
-        whoami: tmxia
-        sw_flowoffload: 0
-        sfe_flow: 0
-        output_format: gz
-        files_dir: /builder/files
-
-    - name: Check for packaged firmware
-      id: check_firmware
-      run: |
-        if ls /opt/openwrt_packit/output/*.img.gz 1> /dev/null 2>&1; then
-          echo "Firmware files found."
-          echo "has_firmware=true" >> $GITHUB_OUTPUT
-        else
-          echo "::warning::No firmware files were generated!"
-          echo "has_firmware=false" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Upload firmware to release
+    # ========== 上传发布部分改为 GitHub Release 并自动清理 ==========
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@master
-      if: steps.check_firmware.outputs.has_firmware == 'true'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: R5S_OpenWrt_${{ env.PACKAGED_OUTPUTDATE }}
-        files: /opt/openwrt_packit/output/*.img.gz
-        body: |
-          首次使用建议全新刷写
-          * 基本信息
-          IP: 192.168.3.3
-          账户: root
-          密码: password
+        tag_name: ${{ env.latest_release }}
+        name: OpenWrt-${{ env.latest_release }}
+        body_path: ${{ env.build_dir }}/bodyFile
+        files: |
+          ${{ env.build_dir }}/rom/*
 
     - name: Delete old releases
       uses: dev-drprasad/delete-older-releases@master
