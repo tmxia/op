@@ -57,21 +57,10 @@ endef
 $(eval $(call BuildPackage,nikki-files))
 EOF
 
-# 下载规则文件（请确保 URL 有效，可替换为其他源）
+# 下载规则文件
 wget -O package/nikki-files/files/etc/nikki/run/geosite.dat https://cdn.uuiu.net/nikki/geosite.dat
 wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://cdn.uuiu.net/nikki/geoip.metadb
 chmod 755 package/nikki-files/files/etc/nikki/run/geosite.dat
 chmod 755 package/nikki-files/files/etc/nikki/run/geoip.metadb
-
-# 配置 pip 镜像（加快 Python 包下载）
-mkdir -p ~/.pip
-cat > ~/.pip/pip.conf <<EOF
-[global]
-index-url = https://pypi.tuna.tsinghua.edu.cn/simple
-trusted-host = pypi.tuna.tsinghua.edu.cn
-EOF
-
-# 安装可能需要的 Python 包（可选，根据构建需要）
-pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil || true
 
 echo "10-custom.sh executed successfully."
