@@ -1,10 +1,32 @@
 #!/bin/bash
 # 10-custom.sh - 自定义设置，在 OpenWrt 源码预处理后执行
 
-# 修改默认 IP
+# ========== 修改网络配置 ==========
+# 修改默认 IP 为 192.168.3.3
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
+# 如果原配置中有 10.0.0.1（某些基础配置可能默认），一并替换
+sed -i 's/10.0.0.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 
-# 修改默认主题 (将 argon 改为 Bootstrap)
+# 修改网关为 192.168.3.1
+sed -i "s/option gateway '10.0.0.1'/option gateway '192.168.3.1'/g" package/base-files/files/bin/config_generate
+sed -i "s/option gateway '192.168.1.1'/option gateway '192.168.3.1'/g" package/base-files/files/bin/config_generate
+
+# 修改 DNS 为 192.168.3.1
+sed -i "s/option dns '10.0.0.1'/option dns '192.168.3.1'/g" package/base-files/files/bin/config_generate
+sed -i "s/option dns '192.168.1.1'/option dns '192.168.3.1'/g" package/base-files/files/bin/config_generate
+
+# 同时修改网络配置文件（如果存在）
+if [ -f package/base-files/files/etc/config/network ]; then
+    sed -i 's/10.0.0.1/192.168.3.3/g' package/base-files/files/etc/config/network
+    sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/etc/config/network
+    sed -i "s/option gateway '10.0.0.1'/option gateway '192.168.3.1'/g" package/base-files/files/etc/config/network
+    sed -i "s/option gateway '192.168.1.1'/option gateway '192.168.3.1'/g" package/base-files/files/etc/config/network
+    sed -i "s/option dns '10.0.0.1'/option dns '192.168.3.1'/g" package/base-files/files/etc/config/network
+    sed -i "s/option dns '192.168.1.1'/option dns '192.168.3.1'/g" package/base-files/files/etc/config/network
+fi
+
+# ========== 其他自定义设置 ==========
+# 修改默认主题
 sed -i 's/luci-theme-argon/luci-theme-bootstrap/g' feeds/luci/collections/luci/Makefile
 
 # 修改主机名
@@ -13,7 +35,7 @@ sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
 # 添加 nikki 源
 echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf
 
-# 重新更新 feeds
+# 重新更新 feeds（确保 nikki 被正确安装）
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
@@ -62,5 +84,16 @@ wget -O package/nikki-files/files/etc/nikki/run/geosite.dat https://cdn.uuiu.net
 wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://cdn.uuiu.net/nikki/geoip.metadb
 chmod 755 package/nikki-files/files/etc/nikki/run/geosite.dat
 chmod 755 package/nikki-files/files/etc/nikki/run/geoip.metadb
+
+# 可选：配置 pip 镜像（加速 Python 包下载，如果需要）
+mkdir -p ~/.pip
+cat > ~/.pip/pip.conf <<EOF
+[global]
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+trusted-host = pypi.tuna.tsinghua.edu.cn
+EOF
+
+# 可选：安装可能需要的 Python 包（根据实际需求）
+pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil || true
 
 echo "10-custom.sh executed successfully."
