@@ -1,23 +1,62 @@
 #!/bin/bash
 # custom.sh - 自定义设置，在 OpenWrt 源码预处理后执行
 
-# ========== 强制修正平台和禁用问题模块 ==========
-echo "Fixing platform to rockchip..."
-sed -i 's/CONFIG_TARGET_mediatek=.*/CONFIG_TARGET_mediatek=n/' .config 2>/dev/null || true
-sed -i 's/CONFIG_TARGET_rockchip=.*/CONFIG_TARGET_rockchip=y/' .config 2>/dev/null || true
-echo "CONFIG_TARGET_rockchip=y" >> .config
-echo "CONFIG_TARGET_rockchip_armv8=y" >> .config
-echo "CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s=y" >> .config
+set -e  # 遇到错误立即退出，便于调试
 
-echo "Disabling kmod-crypto-sha512..."
+echo "=== Starting custom.sh ==="
+
+# ========== 1. 备份当前 .config（如果存在） ==========
+if [ -f .config ]; then
+    cp .config .config.bak
+    echo "Backed up .config to .config.bak"
+fi
+
+# ========== 2. 强制修正平台配置 ==========
+echo "Fixing platform to rockchip..."
+
+# 清除旧的平台配置
+sed -i '/CONFIG_TARGET_mediatek/d' .config 2>/dev/null || true
+sed -i '/CONFIG_TARGET_rockchip/d' .config 2>/dev/null || true
+
+# 写入正确的平台配置
+cat >> .config <<EOF
+CONFIG_TARGET_rockchip=y
+CONFIG_TARGET_rockchip_armv8=y
+CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s=y
+CONFIG_TARGET_ROOTFS_PARTSIZE=960
+EOF
+
+# ========== 3. 禁用可能出问题的内核模块 ==========
+echo "Disabling kmod-crypto-sha512 and kernel crypto sha512..."
 sed -i '/CONFIG_PACKAGE_kmod-crypto-sha512/d' .config
 echo "CONFIG_PACKAGE_kmod-crypto-sha512=n" >> .config
 
-# 可选：显示修正后的平台配置
+# 禁用内核中的 SHA512 支持（避免模块编译）
+sed -i '/CONFIG_CRYPTO_SHA512/d' .config
+echo "CONFIG_CRYPTO_SHA512=n" >> .config
+
+# ========== 4. 清理可能残留的 mediatek 目录或符号链接 ==========
+echo "Cleaning up possible mediatek leftovers..."
+rm -rf target/linux/mediatek 2>/dev/null || true
+rm -rf build_dir/target-*_mediatek* 2>/dev/null || true
+
+# ========== 5. 重新生成完整配置（确保依赖正确） ==========
+echo "Running make defconfig to regenerate full config..."
+make defconfig
+
+# 可选：再次确保关键配置不被覆盖
+echo "CONFIG_TARGET_rockchip=y" >> .config
+echo "CONFIG_TARGET_rockchip_armv8=y" >> .config
+echo "CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s=y" >> .config
+echo "CONFIG_PACKAGE_kmod-crypto-sha512=n" >> .config
+echo "CONFIG_CRYPTO_SHA512=n" >> .config
+
+# 显示当前平台配置
 echo "Current target after fix:"
 grep CONFIG_TARGET_rockchip .config || echo "No rockchip config found"
 
-# ========== 网络配置修改 ==========
+# ========== 6. 网络配置修改 ==========
+echo "Modifying network configuration..."
 # 修改默认 IP 为 192.168.3.3
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 sed -i 's/10.0.0.1/192.168.3.3/g' package/base-files/files/bin/config_generate
@@ -40,17 +79,20 @@ if [ -f package/base-files/files/etc/config/network ]; then
     sed -i "s/option dns '192.168.1.1'/option dns '192.168.3.1'/g" package/base-files/files/etc/config/network
 fi
 
-# ========== 其他自定义 ==========
+# ========== 7. 其他自定义 ==========
+echo "Applying other customizations..."
 # 修改默认主题
 sed -i 's/luci-theme-argon/luci-theme-bootstrap/g' feeds/luci/collections/luci/Makefile
 
 # 修改主机名
 sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
 
-# 添加 nikki 源
-echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf
+# 添加 nikki 源（如果尚未添加）
+if ! grep -q "nikki" feeds.conf; then
+    echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf
+fi
 
-# 重新更新 feeds
+# 更新 feeds（注意：可能会覆盖之前已安装的包，但需要）
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
@@ -111,4 +153,4 @@ EOF
 # 可选：安装 Python 包（忽略错误）
 pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil || true
 
-echo "10-custom.sh executed successfully."
+echo "custom.sh executed successfully."
