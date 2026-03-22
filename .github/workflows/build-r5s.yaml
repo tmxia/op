@@ -22,13 +22,13 @@ jobs:
         sudo timedatectl set-timezone 'Asia/Shanghai'
         git config --global user.name 'actions'
         git config --global user.email 'action@github.com'
-        echo build_dir="/builder" >> "$GITHUB_ENV"
-        echo ccache_model="nanopi-r5s" >> "$GITHUB_ENV"
+        echo "build_dir=/builder" >> $GITHUB_ENV
+        echo "ccache_model=nanopi-r5s" >> $GITHUB_ENV
 
-    - name: Show system
+    - name: Show system info
       run: |
         echo -e "\n\e[1;32mCPU:\e[0m"
-        echo "$(grep 'model name' /proc/cpuinfo | head -1 | awk -F ': ' '{print $2}') ($(grep 'cpu MHz' /proc/cpuinfo | head -1 | awk -F ': ' '{print $2}')MHz) x $(grep processor /proc/cpuinfo  | wc -l)"
+        echo "$(grep 'model name' /proc/cpuinfo | head -1 | awk -F ': ' '{print $2}') ($(grep 'cpu MHz' /proc/cpuinfo | head -1 | awk -F ': ' '{print $2}')MHz) x $(grep processor /proc/cpuinfo | wc -l)"
         echo -e "\n\e[1;32mMemory:\e[0m"
         free -h
         echo -e "\n\e[1;32mStorage:\e[0m"
@@ -37,7 +37,6 @@ jobs:
         lsb_release -a
         echo -e "\n\e[1;32mKernel:\e[0m"
         uname -a
-        echo
 
     - name: Free disk space
       uses: sbwml/actions@free-disk
@@ -64,35 +63,28 @@ jobs:
         git_name: private
         git_password: ${{ secrets.ftp_password }}
         private_url: ${{ secrets.private_url }}
-        # 设置 LAN 环境变量，确保 build.sh 中正确使用（可选，因为 custom.sh 已直接修改配置文件）
         LAN: 192.168.3.1
       run: |
-        # 使用本地已下载的 build.sh
-        cp $GITHUB_WORKSPACE/r5s/build.sh build.sh
-
-        # 创建 openwrt 目录
+        # 1. 复制构建脚本和自定义文件
+        cp $GITHUB_WORKSPACE/r5s/build.sh build.sh          # 注意：build.sh 需预先存在于仓库 r5s/ 下
         mkdir -p openwrt
-
-        # 复制自定义配置文件
         cp $GITHUB_WORKSPACE/r5s/config-musl-r5s openwrt/25-config-musl-r5s-custom
+        cp $GITHUB_WORKSPACE/r5s/custom.sh openwrt/custom.sh
+        chmod +x openwrt/custom.sh
 
-        # 复制自定义 10-custom.sh
-        cp $GITHUB_WORKSPACE/r5s/custom.sh openwrt/10-custom.sh
-        chmod +x openwrt/10-custom.sh
+        # 2. 修改 build.sh：在 rk3568 分支中使用本地配置并执行 custom.sh
+        sed -i '/^elif \[ "$platform" = "rk3568" \]; then$/,/^else$/{ 
+            s|curl -s \$mirror/openwrt/25-config-musl-r5s > .config|cp openwrt/25-config-musl-r5s-custom .config\nbash custom.sh|
+        }' build.sh
 
-        # 修改主脚本 - 精确替换 rk3568 平台的配置下载命令
-        sed -i '/^elif \[ "$platform" = "rk3568" \]; then$/,/^else$/{ s|curl -s \$mirror/openwrt/25-config-musl-r5s > .config|cp openwrt/25-config-musl-r5s-custom .config| }' build.sh
-
-        # 禁用有问题的 crypto-sha512 模块（避免编译错误）
-        echo "CONFIG_PACKAGE_kmod-crypto-sha512=n" >> openwrt/25-config-musl-r5s-custom
-
-        # 执行构建
+        # 3. 执行构建
         export KERNEL_CLANG_LTO=y BUILD_FAST=y ENABLE_CCACHE=y ENABLE_OTA=y ENABLE_BPF=y ENABLE_LTO=y ENABLE_LRNG=y USE_GCC15=y ENABLE_MOLD=y
         bash build.sh rc2 nanopi-r5s
 
+        # 4. 获取版本号
         cd openwrt
         tags=$(git describe --abbrev=0 --tags)
-        echo "latest_release=$tags" >>$GITHUB_ENV
+        echo "latest_release=$tags" >> $GITHUB_ENV
 
     - name: Extensive logs after a failed compilation
       if: steps.compile.outcome == 'failure'
@@ -104,7 +96,7 @@ jobs:
     - name: Prepare Firmware Files
       working-directory: /builder
       run: |
-        # 检查 rockchip 目录是否存在
+        # 尝试查找生成的固件
         if [ -d "openwrt/bin/targets/rockchip" ]; then
             mkdir -p rom info
             cp -a openwrt/bin/targets/rockchip/*/*.img.gz rom/ 2>/dev/null || true
@@ -118,7 +110,6 @@ jobs:
         else
             echo "Warning: rockchip directory not found, listing available targets..."
             find openwrt/bin/targets -type d 2>/dev/null || echo "No targets found"
-            # 尝试查找任何生成的固件
             mkdir -p rom info
             find openwrt/bin/targets -name "*.img.gz" -exec cp {} rom/ \; 2>/dev/null || true
             if ls rom/*.img.gz 1> /dev/null 2>&1; then
