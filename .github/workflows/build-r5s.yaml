@@ -66,7 +66,7 @@ jobs:
         LAN: 192.168.3.1
       run: |
         # 1. 复制构建脚本和自定义文件
-        cp $GITHUB_WORKSPACE/r5s/build.sh build.sh          # 注意：build.sh 需预先存在于仓库 r5s/ 下
+        cp $GITHUB_WORKSPACE/r5s/build.sh build.sh
         mkdir -p openwrt
         cp $GITHUB_WORKSPACE/r5s/config-musl-r5s openwrt/25-config-musl-r5s-custom
         cp $GITHUB_WORKSPACE/r5s/custom.sh openwrt/custom.sh
@@ -96,7 +96,6 @@ jobs:
     - name: Prepare Firmware Files
       working-directory: /builder
       run: |
-        # 尝试查找生成的固件
         if [ -d "openwrt/bin/targets/rockchip" ]; then
             mkdir -p rom info
             cp -a openwrt/bin/targets/rockchip/*/*.img.gz rom/ 2>/dev/null || true
