@@ -1,5 +1,5 @@
 #!/bin/bash
-# 10-custom.sh - 自定义设置，在 OpenWrt 源码预处理后执行
+# custom.sh - 自定义设置，在 OpenWrt 源码预处理后执行
 
 # ========== 强制修正平台和禁用问题模块 ==========
 echo "Fixing platform to rockchip..."
