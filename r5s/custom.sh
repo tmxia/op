@@ -1,29 +1,25 @@
 #!/bin/bash
-# custom.sh - 在配置下载后、make defconfig 前执行，修正平台和禁用问题模块
+# custom.sh - 在配置下载后、make defconfig 前执行，彻底修正平台和禁用问题模块
 
 set -e
 echo "=== Starting custom.sh (post-config) ==="
 
 # ========== 1. 恢复正确的 target/linux/rockchip 目录 ==========
 echo "Restoring target/linux/rockchip from git..."
-if [ -L target/linux/rockchip ]; then
-    echo "target/linux/rockchip is a symlink, removing and restoring from git"
-    rm target/linux/rockchip
-    git checkout target/linux/rockchip
-elif [ ! -d target/linux/rockchip ]; then
-    echo "target/linux/rockchip missing, restoring from git"
-    git checkout target/linux/rockchip
-else
-    echo "target/linux/rockchip is a proper directory, keeping it"
+# 如果 rockchip 是符号链接或目录被删除，从 git 恢复
+if [ -L target/linux/rockchip ] || [ ! -d target/linux/rockchip ]; then
+    rm -f target/linux/rockchip 2>/dev/null || true
+    git checkout HEAD -- target/linux/rockchip 2>/dev/null || git checkout target/linux/rockchip
+    echo "Restored target/linux/rockchip from git."
 fi
 
-# ========== 2. 清理可能的 mediatek 残留 ==========
-echo "Cleaning up mediatek leftovers..."
+# 删除可能残留的 mediatek 目录
+echo "Removing mediatek leftovers..."
 rm -rf target/linux/mediatek 2>/dev/null || true
 rm -rf build_dir/target-*_mediatek* 2>/dev/null || true
 
-# ========== 3. 强制修正平台配置 ==========
-echo "Fixing platform to rockchip..."
+# ========== 2. 强制修正平台配置 ==========
+echo "Fixing platform to rockchip in .config..."
 sed -i '/CONFIG_TARGET_mediatek/d' .config
 sed -i '/CONFIG_TARGET_rockchip/d' .config
 cat >> .config <<EOF
@@ -33,18 +29,22 @@ CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s=y
 CONFIG_TARGET_ROOTFS_PARTSIZE=960
 EOF
 
-# ========== 4. 禁用 kmod-crypto-sha512 和内核 SHA512 模块 ==========
+# ========== 3. 禁用 kmod-crypto-sha512 和内核 SHA512 模块 ==========
 echo "Disabling kmod-crypto-sha512 and kernel crypto sha512..."
 sed -i '/CONFIG_PACKAGE_kmod-crypto-sha512/d' .config
 echo "CONFIG_PACKAGE_kmod-crypto-sha512=n" >> .config
 sed -i '/CONFIG_CRYPTO_SHA512/d' .config
 echo "CONFIG_CRYPTO_SHA512=n" >> .config
 
-# ========== 5. 显示当前平台（调试用） ==========
+# 同时，如果配置文件中还有其他可能导致问题的 crypto 模块，也可以一并禁用（可选）
+# sed -i '/CONFIG_CRYPTO_SHA512/d' .config
+# echo "CONFIG_CRYPTO_SHA512=n" >> .config
+
+# ========== 4. 显示当前平台（调试用） ==========
 echo "Current target after fix:"
 grep CONFIG_TARGET_rockchip .config || echo "No rockchip config found"
 
-# ========== 6. 网络配置修改 ==========
+# ========== 5. 网络配置修改 ==========
 echo "Modifying network configuration..."
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 sed -i 's/10.0.0.1/192.168.3.3/g' package/base-files/files/bin/config_generate
@@ -62,7 +62,7 @@ if [ -f package/base-files/files/etc/config/network ]; then
     sed -i "s/option dns '192.168.1.1'/option dns '192.168.3.1'/g" package/base-files/files/etc/config/network
 fi
 
-# ========== 7. 其他自定义（主题、主机名、nikki 源等） ==========
+# ========== 6. 其他自定义（主题、主机名、nikki 源等） ==========
 echo "Applying other customizations..."
 sed -i 's/luci-theme-argon/luci-theme-bootstrap/g' feeds/luci/collections/luci/Makefile
 sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
