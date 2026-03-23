@@ -1,10 +1,8 @@
 #!/bin/bash
-# custom.sh - 彻底修正平台，清除所有 mediatek 痕迹
-
 set -e
 echo "=== Starting custom.sh (post-config) ==="
 
-# 1. 删除所有 mediatek 相关的目录和文件
+# 1. 删除所有 mediatek 残留（目录、符号链接、缓存）
 echo "Deleting all mediatek related files..."
 rm -rf target/linux/mediatek
 rm -rf build_dir/target-*_mediatek*
@@ -12,7 +10,7 @@ rm -rf staging_dir/target-*_mediatek*
 rm -rf tmp/.config-target-mediatek*
 find . -name "*mediatek*" -type d -exec rm -rf {} \; 2>/dev/null || true
 
-# 2. 确保 rockchip target 目录完整且不是符号链接
+# 2. 确保 rockchip target 目录正确（不是符号链接）
 echo "Ensuring rockchip target is correct..."
 if [ -L target/linux/rockchip ]; then
     rm target/linux/rockchip
@@ -21,7 +19,7 @@ elif [ ! -d target/linux/rockchip ]; then
     git checkout HEAD -- target/linux/rockchip
 fi
 
-# 3. 禁用所有可能改变平台的补丁脚本
+# 3. 禁用可能修改平台的补丁脚本（重命名）
 echo "Disabling problematic patches..."
 for script in 01-prepare_base-mainline.sh 05-fix-source.sh; do
     if [ -f "$script" ]; then
@@ -30,7 +28,7 @@ for script in 01-prepare_base-mainline.sh 05-fix-source.sh; do
     fi
 done
 
-# 4. 修改 .config 为 rockchip 并禁用 sha512
+# 4. 强制修改 .config
 echo "Fixing .config..."
 sed -i '/CONFIG_TARGET_mediatek/d' .config
 sed -i '/CONFIG_TARGET_rockchip/d' .config
@@ -64,13 +62,13 @@ echo "Cleaning build directories..."
 make target/linux/clean
 rm -rf build_dir staging_dir tmp
 
-# 8. 显示最终状态
+# 8. 显示最终状态（调试）
 echo "=== Final target/linux directory ==="
 ls -la target/linux/ | grep -E "rockchip|mediatek"
 echo "=== Final .config platform ==="
 grep CONFIG_TARGET_rockchip .config || echo "No rockchip config found"
 
-# 9. 网络配置修改
+# 9. 网络配置修改（保留你的自定义）
 echo "Modifying network configuration..."
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 sed -i 's/10.0.0.1/192.168.3.3/g' package/base-files/files/bin/config_generate
@@ -79,16 +77,7 @@ sed -i "s/option gateway '192.168.1.1'/option gateway '192.168.3.1'/g" package/b
 sed -i "s/option dns '10.0.0.1'/option dns '192.168.3.1'/g" package/base-files/files/bin/config_generate
 sed -i "s/option dns '192.168.1.1'/option dns '192.168.3.1'/g" package/base-files/files/bin/config_generate
 
-if [ -f package/base-files/files/etc/config/network ]; then
-    sed -i 's/10.0.0.1/192.168.3.3/g' package/base-files/files/etc/config/network
-    sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/etc/config/network
-    sed -i "s/option gateway '10.0.0.1'/option gateway '192.168.3.1'/g" package/base-files/files/etc/config/network
-    sed -i "s/option gateway '192.168.1.1'/option gateway '192.168.3.1'/g" package/base-files/files/etc/config/network
-    sed -i "s/option dns '10.0.0.1'/option dns '192.168.3.1'/g" package/base-files/files/etc/config/network
-    sed -i "s/option dns '192.168.1.1'/option dns '192.168.3.1'/g" package/base-files/files/etc/config/network
-fi
-
-# 10. 其他自定义（主题、主机名、nikki 源等）
+# 10. 其他自定义（主题、主机名、nikki 等）
 echo "Applying other customizations..."
 sed -i 's/luci-theme-argon/luci-theme-bootstrap/g' feeds/luci/collections/luci/Makefile
 sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
