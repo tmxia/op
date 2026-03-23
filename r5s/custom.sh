@@ -1,31 +1,37 @@
 #!/bin/bash
-# custom.sh - 彻底修正平台和禁用问题模块，清理残留缓存
+# custom.sh - 彻底修正平台，清除所有 mediatek 痕迹
 
 set -e
 echo "=== Starting custom.sh (post-config) ==="
 
-# ========== 1. 清理所有构建缓存 ==========
-echo "Cleaning build directories to remove mediatek leftovers..."
-rm -rf build_dir staging_dir tmp
-mkdir -p build_dir staging_dir tmp
+# 1. 删除所有 mediatek 相关的目录和文件
+echo "Deleting all mediatek related files..."
+rm -rf target/linux/mediatek
+rm -rf build_dir/target-*_mediatek*
+rm -rf staging_dir/target-*_mediatek*
+rm -rf tmp/.config-target-mediatek*
+find . -name "*mediatek*" -type d -exec rm -rf {} \; 2>/dev/null || true
 
-# ========== 2. 恢复正确的 target/linux/rockchip 目录 ==========
-echo "Restoring target/linux/rockchip from git..."
-# 如果 rockchip 是符号链接或目录被删除，强制从 git 恢复
-if [ -L target/linux/rockchip ] || [ ! -d target/linux/rockchip ]; then
-    rm -f target/linux/rockchip 2>/dev/null || true
-    git checkout HEAD -- target/linux/rockchip 2>/dev/null || git checkout target/linux/rockchip
-    echo "Restored target/linux/rockchip from git."
+# 2. 确保 rockchip target 目录完整且不是符号链接
+echo "Ensuring rockchip target is correct..."
+if [ -L target/linux/rockchip ]; then
+    rm target/linux/rockchip
+    git checkout HEAD -- target/linux/rockchip
+elif [ ! -d target/linux/rockchip ]; then
+    git checkout HEAD -- target/linux/rockchip
 fi
 
-# 删除所有可能残留的 mediatek 目录
-echo "Removing mediatek leftovers..."
-rm -rf target/linux/mediatek 2>/dev/null || true
-rm -rf build_dir/target-*_mediatek* 2>/dev/null || true
-rm -rf staging_dir/target-*_mediatek* 2>/dev/null || true
+# 3. 禁用所有可能改变平台的补丁脚本
+echo "Disabling problematic patches..."
+for script in 01-prepare_base-mainline.sh 05-fix-source.sh; do
+    if [ -f "$script" ]; then
+        mv "$script" "${script}.disabled"
+        echo "Disabled $script"
+    fi
+done
 
-# ========== 3. 强制修正 .config 平台配置 ==========
-echo "Fixing platform to rockchip in .config..."
+# 4. 修改 .config 为 rockchip 并禁用 sha512
+echo "Fixing .config..."
 sed -i '/CONFIG_TARGET_mediatek/d' .config
 sed -i '/CONFIG_TARGET_rockchip/d' .config
 cat >> .config <<EOF
@@ -33,21 +39,15 @@ CONFIG_TARGET_rockchip=y
 CONFIG_TARGET_rockchip_armv8=y
 CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s=y
 CONFIG_TARGET_ROOTFS_PARTSIZE=960
+CONFIG_PACKAGE_kmod-crypto-sha512=n
+CONFIG_CRYPTO_SHA512=n
 EOF
 
-# ========== 4. 禁用 kmod-crypto-sha512 和内核 SHA512 模块 ==========
-echo "Disabling kmod-crypto-sha512 and kernel crypto sha512..."
-sed -i '/CONFIG_PACKAGE_kmod-crypto-sha512/d' .config
-echo "CONFIG_PACKAGE_kmod-crypto-sha512=n" >> .config
-sed -i '/CONFIG_CRYPTO_SHA512/d' .config
-echo "CONFIG_CRYPTO_SHA512=n" >> .config
-
-# ========== 5. 重新生成完整配置 ==========
-echo "Running make defconfig to regenerate full config..."
+# 5. 运行 make defconfig 生成完整配置
+echo "Running make defconfig..."
 make defconfig
 
-# 再次强制锁定平台（防止 defconfig 时被覆盖）
-echo "Re-locking platform after defconfig..."
+# 6. 再次强制修正（防止 defconfig 覆盖）
 sed -i '/CONFIG_TARGET_mediatek/d' .config
 sed -i '/CONFIG_TARGET_rockchip/d' .config
 cat >> .config <<EOF
@@ -55,19 +55,22 @@ CONFIG_TARGET_rockchip=y
 CONFIG_TARGET_rockchip_armv8=y
 CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5s=y
 CONFIG_TARGET_ROOTFS_PARTSIZE=960
+CONFIG_PACKAGE_kmod-crypto-sha512=n
+CONFIG_CRYPTO_SHA512=n
 EOF
 
-# 确保禁用 sha512 模块
-sed -i '/CONFIG_PACKAGE_kmod-crypto-sha512/d' .config
-echo "CONFIG_PACKAGE_kmod-crypto-sha512=n" >> .config
+# 7. 清理构建目录（确保没有残留）
+echo "Cleaning build directories..."
+make target/linux/clean
+rm -rf build_dir staging_dir tmp
 
-# ========== 6. 显示当前平台（调试用） ==========
-echo "Current target after fix:"
+# 8. 显示最终状态
+echo "=== Final target/linux directory ==="
+ls -la target/linux/ | grep -E "rockchip|mediatek"
+echo "=== Final .config platform ==="
 grep CONFIG_TARGET_rockchip .config || echo "No rockchip config found"
-echo "Target/linux directory listing:"
-ls -la target/linux/ | grep -E "rockchip|mediatek" || echo "No rockchip or mediatek found"
 
-# ========== 7. 网络配置修改 ==========
+# 9. 网络配置修改
 echo "Modifying network configuration..."
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 sed -i 's/10.0.0.1/192.168.3.3/g' package/base-files/files/bin/config_generate
@@ -85,21 +88,18 @@ if [ -f package/base-files/files/etc/config/network ]; then
     sed -i "s/option dns '192.168.1.1'/option dns '192.168.3.1'/g" package/base-files/files/etc/config/network
 fi
 
-# ========== 8. 其他自定义（主题、主机名、nikki 源等） ==========
+# 10. 其他自定义（主题、主机名、nikki 源等）
 echo "Applying other customizations..."
 sed -i 's/luci-theme-argon/luci-theme-bootstrap/g' feeds/luci/collections/luci/Makefile
 sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
 
-# 添加 nikki 源（如果不存在）
 if ! grep -q "nikki" feeds.conf; then
     echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf
 fi
 
-# 更新 feeds
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
-# 创建 nikki-files 包
 mkdir -p package/nikki-files/files/etc/nikki/run
 cat > package/nikki-files/Makefile << 'EOF'
 include $(TOPDIR)/rules.mk
@@ -134,7 +134,6 @@ wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://cdn.uuiu.ne
 chmod 755 package/nikki-files/files/etc/nikki/run/geosite.dat
 chmod 755 package/nikki-files/files/etc/nikki/run/geoip.metadb
 
-# pip 镜像（可选）
 mkdir -p ~/.pip
 cat > ~/.pip/pip.conf <<EOF
 [global]
