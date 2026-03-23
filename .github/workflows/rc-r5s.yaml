@@ -32,7 +32,7 @@ jobs:
     if: github.event.repository.owner.id == github.event.sender.id
     strategy:
       matrix:
-        VERSION: ['24.10']       # 仅构建 24.10 版本
+        VERSION: ['25.12']       # 仅构建 24.10 版本
         SET: ['docker']          # 仅构建 Docker 版本
 
     steps:
