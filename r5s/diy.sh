@@ -3,19 +3,17 @@
 # Default IP
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 
-# Modify default theme (Bootstrap)
-sed -i 's/luci-theme-argon/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
-
 # Change hostname
-sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
+sed -i 's/ImmortalWrt/r5s-lts/g' package/base-files/files/bin/config_generate
 
-# Add package feeds
+# Change default theme (optional)
+sed -i 's/luci-theme-argon/luci-theme-bootstrap/g' feeds/luci/collections/luci/Makefile
+
+# Add nikki feed
 echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf.default
 
-# Create nikki rule files package
+# Create nikki-files package (pre-downloaded rule files)
 mkdir -p package/nikki-files/files/etc/nikki/run
-
-# Create Makefile for nikki-files
 cat > package/nikki-files/Makefile << 'EOF'
 include $(TOPDIR)/rules.mk
 
@@ -32,7 +30,7 @@ define Package/nikki-files
 endef
 
 define Package/nikki-files/description
-  Pre-downloaded rule files for Nikki (geosite.dat and geoip.metadb)
+  Pre-downloaded geosite.dat and geoip.metadb for Nikki
 endef
 
 define Build/Prepare
@@ -53,21 +51,22 @@ endef
 $(eval $(call BuildPackage,nikki-files))
 EOF
 
-# Download rule files
-echo "Downloading rule files..."
-wget -O package/nikki-files/files/etc/nikki/run/geosite.dat https://cdn.uuiu.net/nikki/geosite.dat
-wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://cdn.uuiu.net/nikki/geoip.metadb
+# Download rule files (use mirror for speed)
+wget -O package/nikki-files/files/etc/nikki/run/geosite.dat https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat
+wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb
+chmod 644 package/nikki-files/files/etc/nikki/run/*
 
-chmod 755 package/nikki-files/files/etc/nikki/run/geosite.dat
-chmod 755 package/nikki-files/files/etc/nikki/run/geoip.metadb
+# Update feeds and install nikki-files
+./scripts/feeds update nikki
+./scripts/feeds install -a -p nikki
 
-# Pip3 config (for build dependencies)
+# Pip configuration for build dependencies
 mkdir -p ~/.pip
-cat > ~/.pip/pip.conf <<EOF
+cat > ~/.pip/pip.conf << 'EOF'
 [global]
 index-url = https://pypi.tuna.tsinghua.edu.cn/simple
 trusted-host = pypi.tuna.tsinghua.edu.cn
 EOF
 
-# Install Python packages (if needed by build scripts)
-pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil
+# Install Python packages (if needed)
+pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil 2>/dev/null || true
