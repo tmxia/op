@@ -69,7 +69,7 @@ jobs:
     - name: Load custom config
       run: |
         [ -e $FILES ] && mv $FILES openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        [ -e $CONFIG_FILE ] && cp $CONFIG_FILE openwrt/.config
 
     - name: SSH connect to Actions
       uses: P3TERX/ssh2actions@main
@@ -90,16 +90,62 @@ jobs:
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "compile_status=success" >> $GITHUB_ENV
 
-    - name: Find rootfs tar
-      id: find_rootfs
+    - name: List generated files (debug)
+      if: always()
       run: |
-        ROOTFS_TAR=$(find openwrt/bin/targets/rockchip -name "*-rootfs.tar.gz" | head -n1)
-        if [ -z "$ROOTFS_TAR" ]; then
-          echo "::error::No rootfs.tar.gz found!"
+        echo "=== Full content of openwrt/bin/targets/rockchip ==="
+        find openwrt/bin/targets/rockchip -type f | sort
+        echo "=== End of listing ==="
+
+    - name: Prepare rootfs archive
+      id: prepare_rootfs
+      run: |
+        cd openwrt/bin/targets/rockchip
+        # 查找 rootfs 归档，支持多种命名模式
+        ROOTFS_TAR=$(find . -type f -name "*rootfs*.tar.gz" | head -n1)
+        if [ -n "$ROOTFS_TAR" ]; then
+          echo "Found rootfs.tar.gz: $ROOTFS_TAR"
+          echo "ROOTFS_TAR=$(realpath "$ROOTFS_TAR")" >> $GITHUB_ENV
+          exit 0
+        fi
+
+        # 如果没找到，尝试从 squashfs 镜像提取
+        echo "No rootfs.tar.gz found, extracting from squashfs image..."
+        SQUASHFS_IMG=$(find . -name "*-squashfs-sysupgrade.img.gz" | head -n1)
+        if [ -z "$SQUASHFS_IMG" ]; then
+          echo "::error::No squashfs image found either!"
           exit 1
         fi
+        echo "Found squashfs image: $SQUASHFS_IMG"
+
+        mkdir -p rootfs_extract
+        set +e
+        gunzip -c "$SQUASHFS_IMG" > rootfs_extract/firmware.img
+        GUNZIP_EXIT=$?
+        set -e
+        if [ $GUNZIP_EXIT -eq 1 ]; then
+          echo "::error::gunzip failed with fatal error (exit code 1)"
+          exit 1
+        fi
+        if [ $GUNZIP_EXIT -eq 2 ]; then
+          echo "::warning::gunzip reported trailing garbage (exit code 2), but image was decompressed."
+        fi
+
+        sudo losetup -fP rootfs_extract/firmware.img
+        LOOP_DEV=$(sudo losetup -l | grep firmware.img | awk '{print $1}')
+        mkdir -p rootfs_mount
+        # 尝试挂载第二分区（rockchip sysupgrade 镜像的 rootfs 通常在 p2）
+        if ! sudo mount ${LOOP_DEV}p2 rootfs_mount 2>/dev/null; then
+          echo "Mounting p2 failed, trying p1..."
+          sudo mount ${LOOP_DEV}p1 rootfs_mount
+        fi
+        sudo tar -czf rootfs_extract/rootfs.tar.gz -C rootfs_mount .
+        sudo umount rootfs_mount
+        sudo losetup -d $LOOP_DEV
+        sudo chown $(id -u):$(id -g) rootfs_extract/rootfs.tar.gz
+        ROOTFS_TAR="$(pwd)/rootfs_extract/rootfs.tar.gz"
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
-        echo "Rootfs tar found: $ROOTFS_TAR"
+        echo "Rootfs tar created from squashfs: $ROOTFS_TAR"
 
     - name: Package rockchip as openwrt
       if: ${{ env.compile_status }} == 'success' && !cancelled()
