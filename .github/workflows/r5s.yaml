@@ -69,13 +69,13 @@ jobs:
     - name: Load custom config
       run: |
         [ -e $FILES ] && mv $FILES openwrt/files
-        [ -e $CONFIG_FILE ] && cp $CONFIG_FILE openwrt/.config
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
 
-    - name: SSH connect to Actions (debug)
+    - name: SSH connect to Actions
       uses: P3TERX/ssh2actions@main
       if: (github.event.inputs.ssh == 'true') || contains(github.event.action, 'ssh')
 
-    - name: Prepare config and download
+    - name: Download package
       working-directory: ./openwrt
       run: |
         make defconfig
@@ -90,38 +90,18 @@ jobs:
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "compile_status=success" >> $GITHUB_ENV
 
-    - name: List generated files (debug)
-      if: always()
+    - name: Find rootfs tar
+      id: find_rootfs
       run: |
-        echo "=== Full content of openwrt/bin/targets/rockchip ==="
-        find openwrt/bin/targets/rockchip -type f | sort
-        echo "=== End of listing ==="
-
-    - name: Extract rootfs from squashfs image
-      id: extract_rootfs
-      run: |
-        SQUASHFS_IMG=$(find openwrt/bin/targets/rockchip -name "*-squashfs-sysupgrade.img.gz" | head -n1)
-        if [ -z "$SQUASHFS_IMG" ]; then
-          echo "::error::No squashfs image found!"
+        ROOTFS_TAR=$(find openwrt/bin/targets/rockchip -name "*-rootfs.tar.gz" | head -n1)
+        if [ -z "$ROOTFS_TAR" ]; then
+          echo "::error::No rootfs.tar.gz found!"
           exit 1
         fi
-        echo "Found squashfs image: $SQUASHFS_IMG"
-        mkdir -p rootfs_extract
-        gunzip -c "$SQUASHFS_IMG" > rootfs_extract/firmware.img
-        sudo losetup -fP rootfs_extract/firmware.img
-        LOOP_DEV=$(sudo losetup -l | grep firmware.img | awk '{print $1}')
-        mkdir -p rootfs_mount
-        sudo mount ${LOOP_DEV}p2 rootfs_mount
-        sudo tar -czf rootfs_extract/rootfs.tar.gz -C rootfs_mount .
-        sudo umount rootfs_mount
-        sudo losetup -d $LOOP_DEV
-        sudo chown $(id -u):$(id -g) rootfs_extract/rootfs.tar.gz
-        ROOTFS_TAR="$(pwd)/rootfs_extract/rootfs.tar.gz"
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
-        echo "Rootfs tar created: $ROOTFS_TAR"
+        echo "Rootfs tar found: $ROOTFS_TAR"
 
-    - name: Package rockchip firmware
-      id: package
+    - name: Package rockchip as openwrt
       if: ${{ env.compile_status }} == 'success' && !cancelled()
       uses: unifreq/openwrt_packit@master
       env:
@@ -135,23 +115,14 @@ jobs:
         SW_FLOWOFFLOAD: 0
         SFE_FLOW: 0
 
-    - name: Check for packaged firmware
-      id: check_firmware
-      run: |
-        if ls /opt/openwrt_packit/output/*.img.gz 1> /dev/null 2>&1; then
-          echo "has_firmware=true" >> $GITHUB_OUTPUT
-        else
-          echo "has_firmware=false" >> $GITHUB_OUTPUT
-        fi
-
     - name: Upload firmware to release
       uses: softprops/action-gh-release@master
-      if: steps.check_firmware.outputs.has_firmware == 'true'
+      if: ${{ env.PACKAGED_STATUS == 'success' }} && !cancelled()
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: OpenWrt_${{ env.PACKAGED_OUTPUTDATE }}
-        files: /opt/openwrt_packit/output/*.img.gz
+        files: ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
         body: |
           首次使用建议全新刷写
           * 基本信息
