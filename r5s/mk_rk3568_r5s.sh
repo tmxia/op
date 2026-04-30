@@ -2,15 +2,28 @@
 echo "========================= begin $0 ================="
 
 # ----------------------------------------------------------------------
-# 环境变量及默认值（由 openwrt_packit 提供）
-# WORK_DIR, OUTPUT_DIR, KERNEL_PKG_HOME, KERNEL_VERSION, OPENWRT_VER
+# 环境变量默认值（由 openwrt_packit 提供）
 # ----------------------------------------------------------------------
 : ${WORK_DIR:=/tmp/openwrt_build}
 : ${OUTPUT_DIR:=/opt/openwrt_packit/output}
 : ${KERNEL_PKG_HOME:=/opt/kernel}
-: ${KERNEL_VERSION:=unknown}
 : ${OPENWRT_VER:=unknown}
 : ${ZSTD_LEVEL:=3}
+
+# ----------------------------------------------------------------------
+# 自动检测内核版本（修复 KERNEL_VERSION 未传递的问题）
+# ----------------------------------------------------------------------
+if [ -z "$KERNEL_VERSION" ] || [ "$KERNEL_VERSION" = "unknown" ]; then
+    MODULES_FILE=$(ls ${KERNEL_PKG_HOME}/modules-*.tar.gz 2>/dev/null | head -n1)
+    if [ -n "$MODULES_FILE" ]; then
+        KERNEL_VERSION=$(basename "$MODULES_FILE" | sed 's/^modules-//; s/\.tar\.gz$//')
+        echo "Auto-detected KERNEL_VERSION: $KERNEL_VERSION"
+    else
+        echo "ERROR: Cannot detect kernel version from $KERNEL_PKG_HOME"
+        exit 1
+    fi
+fi
+export KERNEL_VERSION
 
 PLATFORM=rockchip
 SOC=rk3568
@@ -110,6 +123,7 @@ copy_supplement_files() {
     fi
 }
 
+# 占位函数（可根据需要扩展）
 extract_glibc_programs() { :; }
 adjust_docker_config() { :; }
 adjust_openssl_config() { :; }
@@ -120,17 +134,19 @@ adjust_nfs_config() { :; }
 adjust_openssh_config() { :; }
 adjust_openclash_config() { :; }
 use_xrayplug_replace_v2rayplug() { :; }
-create_fstab_config() {
-    cat > "$TGT_ROOT/etc/fstab" <<EOF
-UUID=${ROOTFS_UUID} / btrfs rw,compress=zstd:${ZSTD_LEVEL},relatime 0 1
-EOF
-}
 adjust_turboacc_config() { :; }
 adjust_ntfs_config() { :; }
 adjust_mosdns_config() { :; }
 patch_admin_status_index_html() { :; }
 adjust_kernel_env() { :; }
 copy_uboot_to_fs() { :; }
+
+create_fstab_config() {
+    cat > "$TGT_ROOT/etc/fstab" <<EOF
+UUID=${ROOTFS_UUID} / btrfs rw,compress=zstd:${ZSTD_LEVEL},relatime 0 1
+EOF
+}
+
 write_release_info() {
     cat > "$TGT_ROOT/etc/openwrt_release" <<EOF
 DISTRIB_ID="OpenWrt"
@@ -139,6 +155,7 @@ DISTRIB_TARGET="rockchip/rk3568"
 DISTRIB_DESCRIPTION="NanoPi R5S LTS"
 EOF
 }
+
 write_banner() {
     cat > "$TGT_ROOT/etc/banner" <<EOF
   ______   _____    _____      _____ 
@@ -153,11 +170,13 @@ write_banner() {
  * 设备型号: NanoPi R5S LTS
 EOF
 }
+
 config_first_run() {
     if [ -f "$TGT_ROOT/etc/uci-defaults/99-first-run" ]; then
         chmod +x "$TGT_ROOT/etc/uci-defaults/99-first-run"
     fi
 }
+
 create_snapshot() {
     local name="$1"
     btrfs subvolume snapshot -r "$TGT_ROOT/etc" "$TGT_ROOT/etc-$name" 2>/dev/null || true
@@ -204,6 +223,10 @@ create_partition "$TGT_DEV" "gpt" "$SKIP_MB" "$BOOT_MB" "ext4" "0" "-1" "btrfs"
 make_filesystem "$TGT_DEV" "1" "ext4" "EMMC_BOOT"
 make_filesystem "$TGT_DEV" "2" "btrfs" "EMMC_ROOTFS1"
 
+# 生成 rootfs UUID
+ROOTFS_UUID=$(uuidgen)
+export ROOTFS_UUID
+
 TGT_BOOT="${WORK_DIR}/boot"
 TGT_ROOT="${WORK_DIR}/root"
 mkdir -p "$TGT_BOOT" "$TGT_ROOT"
@@ -216,6 +239,7 @@ btrfs subvolume create "$TGT_ROOT/etc"
 extract_rootfs_files
 extract_rockchip_boot_files
 
+# 配置 armbianEnv.txt
 cd "$TGT_BOOT"
 sed -i '/rootdev=/d' armbianEnv.txt 2>/dev/null
 sed -i '/rootfstype=/d' armbianEnv.txt 2>/dev/null
@@ -234,6 +258,7 @@ EOF
 echo "armbianEnv.txt content:"
 cat armbianEnv.txt
 
+# 配置根文件系统
 cd "$TGT_ROOT"
 copy_supplement_files
 extract_glibc_programs
@@ -258,6 +283,7 @@ write_banner
 config_first_run
 create_snapshot "etc-000"
 
+# 写入 U-Boot
 echo "Writing U-Boot to $TGT_DEV ..."
 dd if="$UBOOT_IDBLOADER" of="$TGT_DEV" bs=512 seek=64 conv=notrunc,fsync status=progress
 dd if="$UBOOT_ITB" of="$TGT_DEV" bs=512 seek=16384 conv=notrunc,fsync status=progress
