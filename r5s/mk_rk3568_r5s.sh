@@ -44,9 +44,14 @@ check_file() {
     fi
 }
 
-# 获取 rootfs 归档（优先使用 OPENWRT_ARMVIRT）
+# 获取 rootfs 归档（优先使用 openwrt_packit 固定名称）
 get_openwrt_rootfs_archive() {
     local workdir="$1"
+    # 在 openwrt_packit 工作目录中查找固定的 rootfs 文件名
+    if [ -f "./openwrt-armsr-armv8-generic-rootfs.tar.gz" ]; then
+        realpath "./openwrt-armsr-armv8-generic-rootfs.tar.gz"
+        return
+    fi
     if [ -n "$OPENWRT_ARMVIRT" ] && [ -f "$OPENWRT_ARMVIRT" ]; then
         echo "$OPENWRT_ARMVIRT"
         return
@@ -123,7 +128,6 @@ copy_supplement_files() {
     fi
 }
 
-# 占位函数（可根据需要扩展）
 extract_glibc_programs() { :; }
 adjust_docker_config() { :; }
 adjust_openssl_config() { :; }
