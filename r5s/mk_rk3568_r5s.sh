@@ -117,6 +117,7 @@ extract_rockchip_boot_files() {
 }
 
 copy_supplement_files() {
+    # 尝试从多个可能位置复制补充文件
     local src="$SCRIPT_DIR/files"
     if [ -d "$src" ]; then
         echo "Copying supplement files from $src ..."
@@ -190,8 +191,17 @@ create_snapshot() {
 # 主流程
 # ----------------------------------------------------------------------
 
+# 脚本所在目录（仓库中的 r5s/）
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# 在 GitHub Actions 中，GITHUB_WORKSPACE 指向仓库根目录，用于读取 U-Boot 文件
+if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/r5s/idbloader.img" ]; then
+    REPO_ROOT="$GITHUB_WORKSPACE"
+else
+    # 如果不在 Actions 中，假设当前目录为仓库根目录
+    REPO_ROOT="$SCRIPT_DIR/.."
+fi
 
+# 内核包
 MODULES_TGZ="${KERNEL_PKG_HOME}/modules-${KERNEL_VERSION}.tar.gz"
 BOOT_TGZ="${KERNEL_PKG_HOME}/boot-${KERNEL_VERSION}.tar.gz"
 DTBS_TGZ="${KERNEL_PKG_HOME}/dtb-rockchip-${KERNEL_VERSION}.tar.gz"
@@ -199,17 +209,21 @@ check_file "$MODULES_TGZ"
 check_file "$BOOT_TGZ"
 check_file "$DTBS_TGZ"
 
+# 根文件系统
 OPWRT_ROOTFS_GZ=$(get_openwrt_rootfs_archive "$PWD")
 check_file "$OPWRT_ROOTFS_GZ"
 echo "Using rootfs: $OPWRT_ROOTFS_GZ"
 
+# 目标镜像名称
 TGT_IMG="${WORK_DIR}/openwrt_${SOC}_${BOARD}_${OPENWRT_VER}_k${KERNEL_VERSION}${SUBVER}.img"
 
-UBOOT_IDBLOADER="${SCRIPT_DIR}/idbloader.img"
-UBOOT_ITB="${SCRIPT_DIR}/u-boot.itb"
+# U-Boot 文件：优先从仓库根目录的 r5s/ 下读取
+UBOOT_IDBLOADER="${REPO_ROOT}/r5s/idbloader.img"
+UBOOT_ITB="${REPO_ROOT}/r5s/u-boot.itb"
 check_file "$UBOOT_IDBLOADER"
 check_file "$UBOOT_ITB"
 
+# 分区大小（单位 MB）
 SKIP_MB=16
 BOOT_MB=512
 ROOTFS_MB=2048
