@@ -14,7 +14,7 @@ echo "========================= begin $0 ================="
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 
 # ----------------------------------------------------------------------
-# 自动检测内核版本
+# 自动检测内核版本（修复 KERNEL_VERSION 未传递的问题）
 # ----------------------------------------------------------------------
 if [ -z "$KERNEL_VERSION" ] || [ "$KERNEL_VERSION" = "unknown" ]; then
     MODULES_FILE=$(ls ${KERNEL_PKG_HOME}/modules-*.tar.gz 2>/dev/null | head -n1)
@@ -47,6 +47,7 @@ check_file() {
     fi
 }
 
+# 获取 rootfs 归档（优先使用 openwrt_packit 固定名称）
 get_openwrt_rootfs_archive() {
     local workdir="$1"
     if [ -f "./openwrt-armsr-armv8-generic-rootfs.tar.gz" ]; then
@@ -129,7 +130,7 @@ copy_supplement_files() {
     fi
 }
 
-# 占位函数（可根据需要扩展）
+# 以下函数为占位（可根据需要扩展）
 extract_glibc_programs() { :; }
 adjust_docker_config() { :; }
 adjust_openssl_config() { :; }
@@ -194,7 +195,6 @@ create_snapshot() {
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# 内核包
 MODULES_TGZ="${KERNEL_PKG_HOME}/modules-${KERNEL_VERSION}.tar.gz"
 BOOT_TGZ="${KERNEL_PKG_HOME}/boot-${KERNEL_VERSION}.tar.gz"
 DTBS_TGZ="${KERNEL_PKG_HOME}/dtb-rockchip-${KERNEL_VERSION}.tar.gz"
