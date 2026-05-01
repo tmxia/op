@@ -11,7 +11,7 @@ echo "========================= begin $0 ================="
 : ${ZSTD_LEVEL:=3}
 
 # ----------------------------------------------------------------------
-# 自动检测内核版本（修复 KERNEL_VERSION 未传递的问题）
+# 自动检测内核版本
 # ----------------------------------------------------------------------
 if [ -z "$KERNEL_VERSION" ] || [ "$KERNEL_VERSION" = "unknown" ]; then
     MODULES_FILE=$(ls ${KERNEL_PKG_HOME}/modules-*.tar.gz 2>/dev/null | head -n1)
@@ -44,7 +44,6 @@ check_file() {
     fi
 }
 
-# 获取 rootfs 归档（优先使用 openwrt_packit 固定名称）
 get_openwrt_rootfs_archive() {
     local workdir="$1"
     if [ -f "./openwrt-armsr-armv8-generic-rootfs.tar.gz" ]; then
@@ -127,7 +126,7 @@ copy_supplement_files() {
     fi
 }
 
-# 以下函数为占位，可根据需要扩展
+# 占位函数
 extract_glibc_programs() { :; }
 adjust_docker_config() { :; }
 adjust_openssl_config() { :; }
@@ -206,13 +205,9 @@ echo "Using rootfs: $OPWRT_ROOTFS_GZ"
 
 TGT_IMG="${WORK_DIR}/openwrt_${SOC}_${BOARD}_${OPENWRT_VER}_k${KERNEL_VERSION}${SUBVER}.img"
 
-# 关键修改：使用 GITHUB_WORKSPACE 环境变量定位 uboot 文件
-if [ -z "$GITHUB_WORKSPACE" ]; then
-    echo "ERROR: GITHUB_WORKSPACE not set. Please run in GitHub Actions environment."
-    exit 1
-fi
-UBOOT_IDBLOADER="${GITHUB_WORKSPACE}/uboot/idbloader.img"
-UBOOT_ITB="${GITHUB_WORKSPACE}/uboot/u-boot.itb"
+# 从临时目录读取 U-Boot 文件（由 workflow 提前放入）
+UBOOT_IDBLOADER="/tmp/uboot/idbloader.img"
+UBOOT_ITB="/tmp/uboot/u-boot.itb"
 check_file "$UBOOT_IDBLOADER"
 check_file "$UBOOT_ITB"
 
