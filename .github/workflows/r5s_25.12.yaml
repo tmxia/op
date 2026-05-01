@@ -1,4 +1,4 @@
-name: R5S-IMM25.12
+name: R5S-IMM-2512
 
 on:
   workflow_dispatch:
