@@ -147,13 +147,13 @@ jobs:
         echo "ROOTFS_TAR=$ROOTFS_TAR" >> $GITHUB_ENV
         echo "Rootfs tar created from squashfs: $ROOTFS_TAR"
 
-    # 关键修复：将 U-Boot 文件复制到 openwrt_packit 能访问的位置
+    # 关键修复：将 U-Boot 文件复制到 /tmp/uboot（绝对路径，确保能被打包脚本找到）
     - name: Prepare U-Boot files
       run: |
-        mkdir -p uboot
-        cp r5s/idbloader.img uboot/
-        cp r5s/u-boot.itb uboot/
-        echo "U-Boot files copied to uboot/ directory"
+        mkdir -p /tmp/uboot
+        cp r5s/idbloader.img /tmp/uboot/
+        cp r5s/u-boot.itb /tmp/uboot/
+        echo "U-Boot files copied to /tmp/uboot"
 
     - name: Package rockchip as openwrt
       if: ${{ env.compile_status }} == 'success' && !cancelled()
