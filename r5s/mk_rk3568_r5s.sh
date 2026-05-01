@@ -44,7 +44,7 @@ check_file() {
     fi
 }
 
-# 获取 rootfs 归档（优先使用 openwrt_packit 固定名称或环境变量）
+# 获取 rootfs 归档（优先使用 openwrt_packit 固定名称）
 get_openwrt_rootfs_archive() {
     local workdir="$1"
     if [ -f "./openwrt-armsr-armv8-generic-rootfs.tar.gz" ]; then
@@ -200,17 +200,19 @@ check_file "$MODULES_TGZ"
 check_file "$BOOT_TGZ"
 check_file "$DTBS_TGZ"
 
-# 根文件系统
 OPWRT_ROOTFS_GZ=$(get_openwrt_rootfs_archive "$PWD")
 check_file "$OPWRT_ROOTFS_GZ"
 echo "Using rootfs: $OPWRT_ROOTFS_GZ"
 
-# 目标镜像名称
 TGT_IMG="${WORK_DIR}/openwrt_${SOC}_${BOARD}_${OPENWRT_VER}_k${KERNEL_VERSION}${SUBVER}.img"
 
-# U-Boot 文件：从当前工作目录的 uboot 子目录读取（由 workflow 复制）
-UBOOT_IDBLOADER="${PWD}/uboot/idbloader.img"
-UBOOT_ITB="${PWD}/uboot/u-boot.itb"
+# 关键修改：使用 GITHUB_WORKSPACE 环境变量定位 uboot 文件
+if [ -z "$GITHUB_WORKSPACE" ]; then
+    echo "ERROR: GITHUB_WORKSPACE not set. Please run in GitHub Actions environment."
+    exit 1
+fi
+UBOOT_IDBLOADER="${GITHUB_WORKSPACE}/uboot/idbloader.img"
+UBOOT_ITB="${GITHUB_WORKSPACE}/uboot/u-boot.itb"
 check_file "$UBOOT_IDBLOADER"
 check_file "$UBOOT_ITB"
 
