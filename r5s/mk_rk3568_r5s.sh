@@ -8,7 +8,7 @@ echo "========================= begin $0 ================="
 : ${OUTPUT_DIR:=/opt/openwrt_packit/output}
 : ${KERNEL_PKG_HOME:=/opt/kernel}
 : ${OPENWRT_VER:=unknown}
-: ${ZSTD_LEVEL:=3}
+: ${ZSTD_LEVEL:=3}   # 虽然改为 ext4，但保留变量，将来可能用于其他压缩
 
 # 确保工作目录存在
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
@@ -72,12 +72,12 @@ create_image() {
     dd if=/dev/zero of="$img" bs=1M count="$size" status=none
 }
 
+# 修改：创建单分区（ext4），从 skip_mb 开始到结束，使用 MBR（或 GPT，但 MBR 更简单）
 create_partition() {
-    local dev="$1" label="$2" skip_mb="$3" boot_mb="$4" boot_fs="$5" ...
-    echo "Partitioning $dev with GPT ..."
-    parted -s "$dev" mklabel gpt
-    parted -s "$dev" mkpart primary "$boot_fs" ${skip_mb}M $((skip_mb + boot_mb))M
-    parted -s "$dev" mkpart primary btrfs $((skip_mb + boot_mb))M 100%
+    local dev="$1" skip_mb="$2"
+    echo "Partitioning $dev with MBR (single ext4 partition after ${skip_mb}MB)..."
+    parted -s "$dev" mklabel msdos
+    parted -s "$dev" mkpart primary ext4 ${skip_mb}MB 100%
     parted -s "$dev" set 1 boot on
     partprobe "$dev" 2>/dev/null
     sleep 2
@@ -89,8 +89,6 @@ make_filesystem() {
     echo "Formatting $part_dev as $type (label $label)..."
     if [ "$type" = "ext4" ]; then
         mkfs.ext4 -F -L "$label" "$part_dev" >/dev/null
-    elif [ "$type" = "btrfs" ]; then
-        mkfs.btrfs -f -L "$label" "$part_dev" >/dev/null
     else
         mkfs."$type" "$part_dev" >/dev/null
     fi
@@ -112,10 +110,11 @@ extract_rootfs_files() {
 }
 
 extract_rockchip_boot_files() {
-    echo "Extracting boot files from $BOOT_TGZ ..."
-    tar -xzf "$BOOT_TGZ" -C "$TGT_BOOT"
-    echo "Extracting dtb files from $DTBS_TGZ ..."
-    tar -xzf "$DTBS_TGZ" -C "$TGT_BOOT"
+    echo "Extracting boot files to $TGT_ROOT/boot ..."
+    mkdir -p "$TGT_ROOT/boot"
+    tar -xzf "$BOOT_TGZ" -C "$TGT_ROOT/boot"
+    echo "Extracting dtb files to $TGT_ROOT/boot ..."
+    tar -xzf "$DTBS_TGZ" -C "$TGT_ROOT/boot"
 }
 
 copy_supplement_files() {
@@ -149,8 +148,9 @@ adjust_kernel_env() { :; }
 copy_uboot_to_fs() { :; }
 
 create_fstab_config() {
+    # 单分区，根文件系统为 ext4，使用 UUID
     cat > "$TGT_ROOT/etc/fstab" <<EOF
-UUID=${ROOTFS_UUID} / btrfs rw,compress=zstd:${ZSTD_LEVEL},relatime 0 1
+UUID=${ROOTFS_UUID} / ext4 rw,relatime 0 1
 EOF
 }
 
@@ -185,8 +185,8 @@ config_first_run() {
 }
 
 create_snapshot() {
-    local name="$1"
-    btrfs subvolume snapshot -r "$TGT_ROOT/etc" "$TGT_ROOT/etc-$name" 2>/dev/null || true
+    # ext4 不支持子卷快照，仅作占位
+    : 
 }
 
 # ----------------------------------------------------------------------
@@ -214,10 +214,11 @@ UBOOT_ITB="/tmp/uboot/u-boot.itb"
 check_file "$UBOOT_IDBLOADER"
 check_file "$UBOOT_ITB"
 
+# 前 16MB 保留给 U-Boot，剩余空间全部分配给根分区
 SKIP_MB=16
-BOOT_MB=512
-ROOTFS_MB=2048
-SIZE=$((SKIP_MB + BOOT_MB + ROOTFS_MB + 1))
+ROOTFS_MB=2048   # 此值仅用于计算最小大小，实际使用剩余全部空间
+# 根据根文件系统实际大小 + 额外 20% 确定总大小，这里简单设为 2560MB（可根据需要调整）
+SIZE=2560
 
 create_image "$TGT_IMG" "$SIZE"
 TGT_DEV=$(losetup -f --show "$TGT_IMG")
@@ -227,44 +228,52 @@ if [ -z "$TGT_DEV" ]; then
 fi
 echo "Loop device: $TGT_DEV"
 
-create_partition "$TGT_DEV" "gpt" "$SKIP_MB" "$BOOT_MB" "ext4" "0" "-1" "btrfs"
-make_filesystem "$TGT_DEV" "1" "ext4" "EMMC_BOOT"
-make_filesystem "$TGT_DEV" "2" "btrfs" "EMMC_ROOTFS1"
+create_partition "$TGT_DEV" "$SKIP_MB"
+make_filesystem "$TGT_DEV" "1" "ext4" "ROOTFS"
 
-# 生成 rootfs UUID
-ROOTFS_UUID=$(uuidgen)
+# 获取 ext4 分区的 UUID（将在格式化后自动生成，也可以手动指定）
+# 等待分区设备出现
+sleep 1
+ROOTFS_UUID=$(blkid -s UUID -o value "${TGT_DEV}p1")
+if [ -z "$ROOTFS_UUID" ]; then
+    echo "ERROR: Failed to get UUID of root partition"
+    exit 1
+fi
 export ROOTFS_UUID
 
-TGT_BOOT="${WORK_DIR}/boot"
 TGT_ROOT="${WORK_DIR}/root"
-mkdir -p "$TGT_BOOT" "$TGT_ROOT"
+mkdir -p "$TGT_ROOT"
+mount_fs "${TGT_DEV}p1" "$TGT_ROOT" "ext4" "defaults"
 
-mount_fs "${TGT_DEV}p1" "$TGT_BOOT" "ext4" "defaults"
-mount_fs "${TGT_DEV}p2" "$TGT_ROOT" "btrfs" "compress=zstd:${ZSTD_LEVEL}"
-echo "Creating /etc subvolume ..."
-btrfs subvolume create "$TGT_ROOT/etc"
-
+# 提取 rootfs 和 boot 文件到同一个目录
 extract_rootfs_files
 extract_rockchip_boot_files
 
-# 配置 armbianEnv.txt
-cd "$TGT_BOOT"
-sed -i '/rootdev=/d' armbianEnv.txt 2>/dev/null
-sed -i '/rootfstype=/d' armbianEnv.txt 2>/dev/null
-sed -i '/rootflags=/d' armbianEnv.txt 2>/dev/null
-cat >> armbianEnv.txt <<EOF
+# 配置 extlinux.conf（兼容 Armbian 和官方 U-Boot）
+mkdir -p "$TGT_ROOT/boot/extlinux"
+cat > "$TGT_ROOT/boot/extlinux/extlinux.conf" <<EOF
+TIMEOUT 30
+DEFAULT primary
+
+LABEL primary
+    LINUX /boot/Image
+    FDT /boot/dtb/rockchip/rk3568-nanopi-r5s.dtb
+    APPEND root=UUID=${ROOTFS_UUID} rootfstype=ext4 console=tty0 console=ttyS2,1500000n8 consoleblank=0 loglevel=7
+EOF
+
+# 同时保留 armbianEnv.txt 用于兼容（如果有 U-Boot 读取它）
+cat > "$TGT_ROOT/boot/armbianEnv.txt" <<EOF
 verbosity=1
 bootlogo=false
 console=serial
 overlay_prefix=rockchip
 fdtfile=rockchip/rk3568-nanopi-r5s.dtb
 rootdev=UUID=${ROOTFS_UUID}
-rootfstype=btrfs
-rootflags=compress=zstd:${ZSTD_LEVEL}
+rootfstype=ext4
 extraargs=cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory swapaccount=1
 EOF
-echo "armbianEnv.txt content:"
-cat armbianEnv.txt
+
+echo "extlinux.conf and armbianEnv.txt created"
 
 # 配置根文件系统
 cd "$TGT_ROOT"
@@ -289,7 +298,6 @@ copy_uboot_to_fs
 write_release_info
 write_banner
 config_first_run
-create_snapshot "etc-000"
 
 # 写入 U-Boot
 echo "Writing U-Boot to $TGT_DEV ..."
@@ -297,7 +305,7 @@ dd if="$UBOOT_IDBLOADER" of="$TGT_DEV" bs=512 seek=64 conv=notrunc,fsync status=
 dd if="$UBOOT_ITB" of="$TGT_DEV" bs=512 seek=16384 conv=notrunc,fsync status=progress
 
 sync
-umount "$TGT_BOOT" "$TGT_ROOT"
+umount "$TGT_ROOT"
 losetup -d "$TGT_DEV"
 
 mkdir -p "$OUTPUT_DIR"
