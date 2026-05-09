@@ -107,12 +107,11 @@ extract_rootfs() {
 # 提取内核、DTB 并放置到 p1 (FAT32)
 extract_boot_to_p1() {
     echo "Extracting boot files (kernel, dtb) to $TGT_BOOT ..."
-    # 内核
     tar -xzf "$BOOT_TGZ" -C "$TGT_BOOT"
-    # DTB (放入 dtb/rockchip 子目录)
+    # DTB 放入 dtb/rockchip 子目录
     mkdir -p "$TGT_BOOT/dtb/rockchip"
     tar -xzf "$DTBS_TGZ" -C "$TGT_BOOT/dtb/rockchip"
-    # 修正 dtb 文件名（可选，根据实际编译出的 dtb 调整）
+    # 兼容 LTS dtb 名称
     if [ -f "$TGT_BOOT/dtb/rockchip/rk3568-nanopi-r5s-lts.dtb" ] && [ ! -f "$TGT_BOOT/dtb/rockchip/rk3568-nanopi-r5s.dtb" ]; then
         ln -sf rk3568-nanopi-r5s-lts.dtb "$TGT_BOOT/dtb/rockchip/rk3568-nanopi-r5s.dtb"
     fi
@@ -144,7 +143,7 @@ write_uboot() {
     sync
 }
 
-# 其他辅助函数（占位/无操作）
+# 占位函数（可根据需要扩展）
 extract_glibc_programs() { :; }
 adjust_docker_config() { :; }
 adjust_openssl_config() { :; }
@@ -201,9 +200,23 @@ config_first_run() {
 
 create_snapshot() { :; }
 
+# 复制补充文件
+copy_supplement_files() {
+    local src="$SCRIPT_DIR/files"
+    if [ -d "$src" ]; then
+        echo "Copying supplement files from $src ..."
+        cp -rf "$src"/* "$TGT_ROOT/"
+        chmod +x "$TGT_ROOT"/usr/bin/* 2>/dev/null || true
+        chmod +x "$TGT_ROOT"/etc/init.d/* 2>/dev/null || true
+    else
+        echo "Notice: No supplement files found in $src"
+    fi
+}
+
 # ------------------------- 主流程 -------------------------
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# 检查必要的输入文件
 MODULES_TGZ="${KERNEL_PKG_HOME}/modules-${KERNEL_VERSION}.tar.gz"
 BOOT_TGZ="${KERNEL_PKG_HOME}/boot-${KERNEL_VERSION}.tar.gz"
 DTBS_TGZ="${KERNEL_PKG_HOME}/dtb-rockchip-${KERNEL_VERSION}.tar.gz"
@@ -220,7 +233,7 @@ UBOOT_ITB="/tmp/uboot/u-boot.itb"
 check_file "$UBOOT_IDBLOADER"
 check_file "$UBOOT_ITB"
 
-# 镜像总大小通常 2.5GB 足够，可根据需要调整
+# 镜像大小 (单位 MB)
 SIZE=2560
 TGT_IMG="${WORK_DIR}/openwrt_${SOC}_${BOARD}_${OPENWRT_VER}_k${KERNEL_VERSION}${SUBVER}.img"
 
@@ -252,28 +265,17 @@ mkdir -p "$TGT_ROOT" "$TGT_BOOT"
 mount_fs "${TGT_DEV}p2" "$TGT_ROOT" "ext4" "defaults"
 mount_fs "${TGT_DEV}p1" "$TGT_BOOT" "vfat" "defaults"
 
+# 提取根文件系统和启动文件
 extract_rootfs
 extract_boot_to_p1
 create_extlinux_conf "$TGT_BOOT" "$ROOTFS_UUID"
 
-# 补全根文件系统内容
+# 将 boot 分区 bind mount 到根文件系统的 /boot
 cd "$TGT_ROOT"
-# 可选：将 boot 分区也链接到 /boot 以便内部访问（不必须）
-mkdir -p "$TGT_ROOT/boot"
-mount --bind "$TGT_BOOT" "$TGT_ROOT/boot"
+mkdir -p boot
+mount --bind "$TGT_BOOT" boot
 
-# 执行各种调整函数（保持原有逻辑）
-copy_supplement_files() {
-    local src="$SCRIPT_DIR/files"
-    if [ -d "$src" ]; then
-        echo "Copying supplement files from $src ..."
-        cp -rf "$src"/* "$TGT_ROOT/"
-        chmod +x "$TGT_ROOT"/usr/bin/* 2>/dev/null || true
-        chmod +x "$TGT_ROOT"/etc/init.d/* 2>/dev/null || true
-    else
-        echo "Notice: No supplement files found in $src"
-    fi
-}
+# 执行补充操作
 copy_supplement_files
 extract_glibc_programs
 adjust_docker_config
@@ -296,14 +298,41 @@ write_release_info
 write_banner
 config_first_run
 
-umount "$TGT_ROOT/boot" 2>/dev/null || true
-umount "$TGT_ROOT"
-umount "$TGT_BOOT"
+# 清理：退出挂载点目录并卸载
+cd /
+sync
+
+# 卸载 bind mount
+umount "$TGT_ROOT/boot" 2>/dev/null || umount -l "$TGT_ROOT/boot"
+# 卸载根分区和 boot 分区
+umount "$TGT_ROOT" 2>/dev/null || umount -l "$TGT_ROOT"
+umount "$TGT_BOOT" 2>/dev/null || umount -l "$TGT_BOOT"
+
+# 写入 U-Boot（需要重新关联 loop 设备）
+losetup -d "$TGT_DEV" 2>/dev/null || true
+TGT_DEV=$(losetup -f --show "$TGT_IMG")
+if [ -z "$TGT_DEV" ]; then
+    echo "ERROR: Failed to setup loop device for U-Boot writing"
+    exit 1
+fi
 write_uboot "$TGT_DEV"
 losetup -d "$TGT_DEV"
 
-# 压缩镜像
+# 压缩最终镜像
 mkdir -p "$OUTPUT_DIR"
-gzip -c "$TGT_IMG" > "${OUTPUT_DIR}/$(basename "$TGT_IMG").gz"
-echo "Image generated: ${OUTPUT_DIR}/$(basename "$TGT_IMG").gz"
+if [ -f "$TGT_IMG" ]; then
+    echo "Compressing image..."
+    gzip -c "$TGT_IMG" > "${OUTPUT_DIR}/$(basename "$TGT_IMG").gz"
+    if [ $? -eq 0 ]; then
+        echo "Image generated: ${OUTPUT_DIR}/$(basename "$TGT_IMG").gz"
+        rm -f "$TGT_IMG"   # 删除未压缩的原始文件以节省空间
+    else
+        echo "ERROR: gzip compression failed"
+        exit 1
+    fi
+else
+    echo "ERROR: Image file $TGT_IMG not found!"
+    exit 1
+fi
+
 echo "========================== end $0 ================================"
