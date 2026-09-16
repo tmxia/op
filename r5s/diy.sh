@@ -9,16 +9,6 @@ sed -i 's/luci-theme-argon/luci-theme-Bootstrap/g' feeds/luci/collections/luci/M
 # Changing the host name
 sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
 
-# Git sparse clone
-git_sparse_clone() {
-    branch="$1" repourl="$2" && shift 2
-    git clone --depth=1 -b "$branch" --single-branch --filter=blob:none --sparse "$repourl"
-    repodir=$(echo "$repourl" | awk -F '/' '{print $(NF)}')
-    cd "$repodir" && git sparse-checkout set "$@"
-    mv -f "$@" ../package
-    cd .. && rm -rf "$repodir"
-}
-
 # 添加源
 echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf.default
 
@@ -67,14 +57,44 @@ endef
 $(eval $(call BuildPackage,nikki-files))
 EOF
 
-# 下载规则文件到包目录
+# ==================== 修复点 2：带重试的规则文件下载 ====================
 echo "下载规则文件中..."
-wget -O package/nikki-files/files/etc/nikki/run/geosite.dat https://cdn.uuiu.net/nikki/geosite.dat
-wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://cdn.uuiu.net/nikki/geoip.metadb
+GEO_MIRRORS=(
+  "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat"
+  "https://cdn.uuiu.net/nikki/geosite.dat"
+)
+GEOIP_MIRRORS=(
+  "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb"
+  "https://cdn.uuiu.net/nikki/geoip.metadb"
+)
 
-# 设置文件权限
-chmod 755 package/nikki-files/files/etc/nikki/run/geosite.dat
-chmod 755 package/nikki-files/files/etc/nikki/run/geoip.metadb
+download_with_retry() {
+  local out=$1; shift
+  for url in "$@"; do
+    for i in 1 2 3; do
+      if wget -q --timeout=30 -O "$out" "$url"; then
+        if [ -s "$out" ]; then
+          echo "下载成功: $url"
+          return 0
+        fi
+      fi
+      echo "重试 ($i/3): $url"
+      sleep 3
+    done
+  done
+  echo "警告: 所有镜像下载失败: $out"
+  return 1
+}
+
+download_with_retry package/nikki-files/files/etc/nikki/run/geosite.dat "${GEO_MIRRORS[@]}" || true
+download_with_retry package/nikki-files/files/etc/nikki/run/geoip.metadb "${GEOIP_MIRRORS[@]}" || true
+
+# 检查文件大小，如果过小就创建一个占位符，避免安装脚本报错
+for f in package/nikki-files/files/etc/nikki/run/geosite.dat \
+         package/nikki-files/files/etc/nikki/run/geoip.metadb; do
+  [ -f "$f" ] && [ -s "$f" ] || { echo "占位: $f"; touch "$f"; }
+  chmod 755 "$f"
+done
 
 # 更新feeds并安装nikki-files包
 ./scripts/feeds update nikki-files
