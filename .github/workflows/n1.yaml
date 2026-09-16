@@ -144,10 +144,23 @@ jobs:
         file_glob: true
         overwrite: true
 
+  cleanup_old_releases:
+    runs-on: ubuntu-24.04
+    needs: [prepare_release, build]
+    if: ${{ always() }}
+    steps:
+    - name: Keep latest 2 releases
+      uses: dev-drprasad/delete-older-releases@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        keep_latest: 2
+        delete_tags: true
+
   cleanup_self:
     name: Cleanup Self Workflow History
     runs-on: ubuntu-latest
-    needs: [prepare_release, build]
+    needs: [prepare_release, build, cleanup_old_releases]
     if: ${{ always() }}
     permissions:
       actions: write
