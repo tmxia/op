@@ -81,7 +81,14 @@ mount_fs "${TGT_DEV}p2" "${TGT_ROOT}" "btrfs" "compress=zstd:${ZSTD_LEVEL}"
 echo "创建 /etc 子卷 ..."
 btrfs subvolume create $TGT_ROOT/etc
 extract_rootfs_files
-extract_rockchip_boot_files
+
+# ==================== 修复点 1：自己实现 boot 提取，绕开 public_funcs 的 bug ====================
+echo "释放 Kernel zImage、uInitrd 及 dtbs 压缩包 ..."
+tar -xzf ${BOOT_TGZ} -C ${TGT_BOOT}/
+tar -xzf ${DTBS_TGZ} -C ${TGT_BOOT}/
+# 复制 bootloader（使用 cp -rf，注意 -r 参数）
+cp -rf ${BOOTFILES_HOME}/${SOC}/* ${TGT_BOOT}/ 2>/dev/null || true
+echo "释放 boot 文件完成"
 
 echo "修改引导分区相关配置 ... "
 cd $TGT_BOOT
@@ -123,4 +130,3 @@ clean_work_env
 mv ${TGT_IMG} ${OUTPUT_DIR} && sync
 echo "镜像已生成! 存放在 ${OUTPUT_DIR} 下面!"
 echo "========================== end $0 ================================"
-echo
