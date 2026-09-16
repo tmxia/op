@@ -1,93 +1,202 @@
 #!/bin/bash
+set -e
 
-# Default IP
-sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
+STAGE="$1"
 
-# Modify default theme
-sed -i 's/luci-theme-argon/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
+CLASHOO_FEED="src-git clashoo https://github.com/kenzok8/openwrt-clashoo.git;main"
+AMLOGIC_REPO="https://github.com/ophub/luci-app-amlogic.git"
 
-# Changing the host name
-sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
+pre_feeds() {
+    [ ! -f feeds.conf ] && cp feeds.conf.default feeds.conf
 
-# Git sparse clone
-git_sparse_clone() {
-    branch="$1" repourl="$2" && shift 2
-    git clone --depth=1 -b "$branch" --single-branch --filter=blob:none --sparse "$repourl"
-    repodir=$(echo "$repourl" | awk -F '/' '{print $(NF)}')
-    cd "$repodir" && git sparse-checkout set "$@"
-    mv -f "$@" ../package
-    cd .. && rm -rf "$repodir"
+    sed -i '/^#/d' feeds.conf
+    sed -i -e 's|git.openwrt.org/feed|github.com/openwrt|g' \
+           -e 's|git.openwrt.org/project|github.com/openwrt|g' feeds.conf
+
+    grep -q "src-git clashoo" feeds.conf || echo "$CLASHOO_FEED" >> feeds.conf
+
+    if [ -f tools/libtool/Makefile ]; then
+        python3 - << 'PYEOF'
+import re
+path = 'tools/libtool/Makefile'
+with open(path) as f:
+    content = f.read()
+old = '(cd $(HOST_BUILD_DIR);'
+new = '(cd $(HOST_BUILD_DIR); rm -rf .git; git init -q . 2>/dev/null || true; git config user.email ci@local 2>/dev/null || true; git config user.name CI 2>/dev/null || true;'
+if old in content and 'rm -rf .git; git init' not in content:
+    content = content.replace(old, new, 1)
+    with open(path, 'w') as f:
+        f.write(content)
+    print('patched tools/libtool/Makefile')
+else:
+    print('tools/libtool/Makefile: no change needed')
+PYEOF
+    fi
 }
 
-# 添加源
-echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf.default
+post_feeds() {
+    sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 
-# Add packages - 保留 Amlogic 工具
-git clone https://github.com/ophub/luci-app-amlogic --depth=1 clone/amlogic
-cp -rf clone/amlogic/luci-app-amlogic feeds/luci/applications/
+    KERNEL_VERSION=$(grep '^KERNEL_PATCHVER' target/linux/rockchip/Makefile | cut -d= -f2 | tr -d ' ')
+    [ -z "$KERNEL_VERSION" ] && KERNEL_VERSION="6.12"
+    KERNEL_CONFIG_FILE="target/linux/rockchip/config-${KERNEL_VERSION}"
+    touch "$KERNEL_CONFIG_FILE"
 
-# 创建nikki规则文件包目录
-mkdir -p package/nikki-files/files/etc/nikki/run
+    for opt in INET_DIAG INET_TCP_DIAG INET_UDP_DIAG INET_RAW_DIAG \
+               BRIDGE BRIDGE_NETFILTER NF_IP_VS NETFILTER_XT_MATCH_PHYSDEV NF_NAT; do
+        sed -i "/^# CONFIG_${opt} is not set/d" "$KERNEL_CONFIG_FILE"
+        sed -i "/^CONFIG_${opt}=/d" "$KERNEL_CONFIG_FILE"
+        echo "CONFIG_${opt}=y" >> "$KERNEL_CONFIG_FILE"
+    done
 
-# 创建Makefile
-cat > package/nikki-files/Makefile << 'EOF'
-include $(TOPDIR)/rules.mk
+    mkdir -p package/custom
+    rm -rf package/custom/luci-app-amlogic
+    git clone --depth 1 "$AMLOGIC_REPO" package/custom/luci-app-amlogic 2>&1 | tail -2
+    rm -rf package/custom/luci-app-amlogic/.git
 
-PKG_NAME:=nikki-files
-PKG_VERSION:=1.0
-PKG_RELEASE:=1
+    mkdir -p files/etc/uci-defaults
+    cat > files/etc/uci-defaults/99-custom << 'EOF'
+#!/bin/sh
+uci set network.lan.ipaddr='192.168.3.3/24'
+uci set network.lan.gateway='192.168.3.1'
+uci set network.lan.dns='192.168.3.1'
+uci delete network.lan.netmask 2>/dev/null
+uci commit network
+uci set dhcp.lan.ignore='1'
+uci commit dhcp
+uci set firewall.@zone[0].network='lan'
+uci commit firewall
+uci set network.wan.clientid=''
+uci commit network
 
-include $(INCLUDE_DIR)/package.mk
+printf "tony\ntony\n" | passwd root
 
-define Package/nikki-files
-  SECTION:=utils
-  CATEGORY:=Utilities
-  TITLE:=Nikki rule files
-endef
-
-define Package/nikki-files/description
-  Pre-downloaded rule files for Nikki (geosite.dat and geoip.metadb)
-endef
-
-define Build/Prepare
-endef
-
-define Build/Configure
-endef
-
-define Build/Compile
-endef
-
-define Package/nikki-files/install
-	$(INSTALL_DIR) $(1)/etc/nikki/run
-	$(INSTALL_DATA) ./files/etc/nikki/run/geosite.dat $(1)/etc/nikki/run/
-	$(INSTALL_DATA) ./files/etc/nikki/run/geoip.metadb $(1)/etc/nikki/run/
-endef
-
-$(eval $(call BuildPackage,nikki-files))
+uci set luci.main.mediaurlbase='/luci-static/bootstrap'
+uci delete luci.themes.Argon 2>/dev/null || true
+uci commit luci
+rm -rf /tmp/luci-* /tmp/luci-modulecache/* 2>/dev/null
+/etc/init.d/uhttpd restart
+/etc/init.d/network restart
+/etc/init.d/firewall restart
+exit 0
 EOF
+    chmod +x files/etc/uci-defaults/99-custom
 
-# 下载规则文件到包目录
-echo "下载规则文件中..."
-wget -O package/nikki-files/files/etc/nikki/run/geosite.dat https://cdn.uuiu.net/nikki/geosite.dat
-wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://cdn.uuiu.net/nikki/geoip.metadb
+    cat > files/etc/uci-defaults/99-custom-ssh << 'EOF'
+#!/bin/sh
+/etc/init.d/dropbear stop
+/etc/init.d/sshd stop 2>/dev/null
+uci set dropbear.@dropbear[0].Port='2222'
+uci commit dropbear
+SSHD_CONFIG="/etc/ssh/sshd_config"
+if [ -f "$SSHD_CONFIG" ]; then
+    sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' "$SSHD_CONFIG"
+    sed -i 's/^#*Port.*/Port 22/' "$SSHD_CONFIG"
+fi
+/etc/init.d/dropbear start
+/etc/init.d/sshd enable 2>/dev/null
+/etc/init.d/sshd start 2>/dev/null
+exit 0
+EOF
+    chmod +x files/etc/uci-defaults/99-custom-ssh
 
-# 设置文件权限
-chmod 755 package/nikki-files/files/etc/nikki/run/geosite.dat
-chmod 755 package/nikki-files/files/etc/nikki/run/geoip.metadb
+    mkdir -p files/etc/docker
+    cat > files/etc/docker/daemon.json << 'EOF'
+{
+  "data-root": "/opt/docker",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+EOF
+}
 
-# 更新feeds并安装nikki-files包
-./scripts/feeds update nikki-files
-./scripts/feeds install -a -p nikki-files
+config_stage() {
+    for opt in CONFIG_ALL_KMODS CONFIG_ALL_NONSHARED CONFIG_DEVEL CONFIG_BUILDBOT; do
+        sed -i "s/^${opt}=.*/# ${opt} is not set/" .config || true
+        grep -q "^# ${opt} is not set" .config || echo "# ${opt} is not set" >> .config
+    done
 
-# Pip3 conf
-mkdir -p ~/.pip
-echo "[global]
-index-url = https://pypi.tuna.tsinghua.edu.cn/simple
-trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
+    DISABLE_PKGS="
+    adblock luci-app-adblock
+    aria2 luci-app-aria2
+    sqm-scripts nft-qos luci-app-nft-qos luci-app-sqm
+    ddns-scripts luci-app-ddns
+    miniupnpd-nftables luci-app-upnp
+    samba4-libs samba4-server luci-app-samba4
+    minidlna luci-app-minidlna
+    luci-proto-3g luci-proto-qmi qmi-utils uqmi umbim usb-modeswitch-official
+    iwlwifi-firmware-ax200 iwlwifi-firmware-ax210 mt76x2-firmware mt792x-firmware
+    luci-app-diskman collectd luci-app-statistics
+    luci-app-watchcat luci-theme-openwrt-2020
+    luci-app-cpufreq luci-i18n-cpufreq-zh-cn
+    luci-app-hd-idle hd-idle luci-i18n-hd-idle-zh-cn
+    luci-app-nlbwmon nlbwmon luci-i18n-nlbwmon-zh-cn
+    luci-app-smartdns smartdns luci-i18n-smartdns-zh-cn
+    luci-app-openclash luci-app-passwall luci-app-passwall2
+    luci-app-ssr-plus luci-app-homeproxy luci-app-mosdns
+    luci-app-adguardhome luci-app-ddns-go luci-app-netdata
+    luci-app-vlmcsd luci-app-vnstat2 luci-app-wechatpush
+    luci-app-keepalived luci-app-ramfree luci-app-rustdesk-server
+    luci-app-udpxy luci-app-wol
+    luci-theme-argon luci-theme-aurora luci-theme-kucat
+    luci-theme-material luci-theme-material3 luci-theme-openwrt
+    "
+    for pkg in $DISABLE_PKGS; do
+        sed -i "s/^CONFIG_PACKAGE_${pkg}=.*/# CONFIG_PACKAGE_${pkg} is not set/" .config
+        grep -q "^# CONFIG_PACKAGE_${pkg} is not set" .config || \
+          echo "# CONFIG_PACKAGE_${pkg} is not set" >> .config
+    done
 
-# Pip3 packages
-pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil
+    ENABLE_PKGS="
+    bc vsftpd sudo unzip file procd logrotate coreutils-stat lsof jq
+    wireguard-tools python3-light
+    bash perl parted curl dosfstools e2fsprogs lsblk pv losetup uuidgen fdisk
+    block-mount blkid
+    "
+    for pkg in $ENABLE_PKGS; do
+        sed -i "/^# CONFIG_PACKAGE_${pkg} is not set/d" .config
+        sed -i "s/^CONFIG_PACKAGE_${pkg}=.*/CONFIG_PACKAGE_${pkg}=y/" .config
+        grep -q "^CONFIG_PACKAGE_${pkg}=y" .config || echo "CONFIG_PACKAGE_${pkg}=y" >> .config
+    done
 
-# Clean packages
-rm -rf clone
+    for pkg in clashoo luci-app-clashoo luci-i18n-clashoo-zh-cn kmod-inet-diag \
+               luci-app-amlogic luci-lib-nixio \
+               luci-app-ttyd ttyd luci-i18n-ttyd-zh-cn \
+               docker dockerd docker-compose containerd runc tini libnetwork \
+               luci-app-dockerman luci-lib-docker luci-i18n-dockerman-zh-cn cgroupfs-mount \
+               kmod-br-netfilter kmod-veth kmod-nf-ipvs kmod-ipt-physdev \
+               kmod-ipt-tee kmod-ipt-nat6 kmod-ipt-nat-extra \
+               kmod-nf-nathelper kmod-nf-nathelper-extra \
+               kmod-fs-overlay kmod-fuse \
+               iptables-nft iptables-zz-legacy \
+               iptables-mod-conntrack-extra iptables-mod-ipopt iptables-mod-extra iptables-mod-filter \
+               ip6tables-nft ip6tables-extra; do
+        sed -i "/^# CONFIG_PACKAGE_${pkg} is not set/d" .config
+        sed -i "/^CONFIG_PACKAGE_${pkg}=/d" .config
+        echo "CONFIG_PACKAGE_${pkg}=y" >> .config
+    done
+
+    MISSING=0
+    for pkg in clashoo luci-app-clashoo kmod-inet-diag luci-app-amlogic luci-app-ttyd ttyd docker dockerd luci-app-dockerman; do
+        if grep -q "^CONFIG_PACKAGE_${pkg}=y" .config; then
+            echo "[OK] $pkg"
+        else
+            echo "[FAIL] $pkg"
+            MISSING=1
+        fi
+    done
+    if [ $MISSING -eq 1 ]; then
+        echo "ERROR: required packages not enabled"
+        exit 1
+    fi
+}
+
+case "$STAGE" in
+    pre)    pre_feeds ;;
+    post)   post_feeds ;;
+    config) config_stage ;;
+    *)      echo "Usage: $0 {pre|post|config}"; exit 1 ;;
+esac
