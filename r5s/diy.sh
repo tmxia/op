@@ -3,17 +3,33 @@
 # Default IP
 sed -i 's/192.168.1.1/192.168.3.3/g' package/base-files/files/bin/config_generate
 
-# Change hostname
-sed -i 's/ImmortalWrt/r5s-lts/g' package/base-files/files/bin/config_generate
+# Modify default theme
+sed -i 's/luci-theme-argon/luci-theme-Bootstrap/g' feeds/luci/collections/luci/Makefile
 
-# Change default theme (optional)
-sed -i 's/luci-theme-argon/luci-theme-bootstrap/g' feeds/luci/collections/luci/Makefile
+# Changing the host name
+sed -i 's/ImmortalWrt/r5s/g' package/base-files/files/bin/config_generate
 
-# Add nikki feed
+# Git sparse clone
+git_sparse_clone() {
+    branch="$1" repourl="$2" && shift 2
+    git clone --depth=1 -b "$branch" --single-branch --filter=blob:none --sparse "$repourl"
+    repodir=$(echo "$repourl" | awk -F '/' '{print $(NF)}')
+    cd "$repodir" && git sparse-checkout set "$@"
+    mv -f "$@" ../package
+    cd .. && rm -rf "$repodir"
+}
+
+# 添加源
 echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf.default
 
-# Create nikki-files package (pre-downloaded rule files)
+# Add packages - 保留 Amlogic 工具
+git clone https://github.com/ophub/luci-app-amlogic --depth=1 clone/amlogic
+cp -rf clone/amlogic/luci-app-amlogic feeds/luci/applications/
+
+# 创建nikki规则文件包目录
 mkdir -p package/nikki-files/files/etc/nikki/run
+
+# 创建Makefile
 cat > package/nikki-files/Makefile << 'EOF'
 include $(TOPDIR)/rules.mk
 
@@ -30,7 +46,7 @@ define Package/nikki-files
 endef
 
 define Package/nikki-files/description
-  Pre-downloaded geosite.dat and geoip.metadb for Nikki
+  Pre-downloaded rule files for Nikki (geosite.dat and geoip.metadb)
 endef
 
 define Build/Prepare
@@ -51,22 +67,27 @@ endef
 $(eval $(call BuildPackage,nikki-files))
 EOF
 
-# Download rule files (use mirror for speed)
-wget -O package/nikki-files/files/etc/nikki/run/geosite.dat https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat
-wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb
-chmod 644 package/nikki-files/files/etc/nikki/run/*
+# 下载规则文件到包目录
+echo "下载规则文件中..."
+wget -O package/nikki-files/files/etc/nikki/run/geosite.dat https://cdn.uuiu.net/nikki/geosite.dat
+wget -O package/nikki-files/files/etc/nikki/run/geoip.metadb https://cdn.uuiu.net/nikki/geoip.metadb
 
-# Update feeds and install nikki-files
-./scripts/feeds update nikki
-./scripts/feeds install -a -p nikki
+# 设置文件权限
+chmod 755 package/nikki-files/files/etc/nikki/run/geosite.dat
+chmod 755 package/nikki-files/files/etc/nikki/run/geoip.metadb
 
-# Pip configuration for build dependencies
+# 更新feeds并安装nikki-files包
+./scripts/feeds update nikki-files
+./scripts/feeds install -a -p nikki-files
+
+# Pip3 conf
 mkdir -p ~/.pip
-cat > ~/.pip/pip.conf << 'EOF'
-[global]
+echo "[global]
 index-url = https://pypi.tuna.tsinghua.edu.cn/simple
-trusted-host = pypi.tuna.tsinghua.edu.cn
-EOF
+trusted-host = pypi.tuna.tsinghua.edu.cn" > ~/.pip/pip.conf
 
-# Install Python packages (if needed)
-pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil 2>/dev/null || true
+# Pip3 packages
+pip3 install requests telethon tqdm paramiko tailer flask-cors unrar pytz bleach beautifulsoup4 python-dateutil
+
+# Clean packages
+rm -rf clone
